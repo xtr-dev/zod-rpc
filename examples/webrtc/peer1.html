@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC RPC Peer 1</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 900px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f0f8ff;
+        }
+        .container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .status { 
+            padding: 10px; 
+            border-radius: 4px; 
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .connecting { background: #fff3cd; color: #856404; }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.secondary { background: #6c757d; }
+        button.secondary:hover { background: #545b62; }
+        input, select, textarea { 
+            padding: 8px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            margin: 5px; 
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .result { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            padding: 10px; 
+            border-radius: 4px; 
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        .error { 
+            background: #f8d7da; 
+            border: 1px solid #f5c6cb; 
+            color: #721c24; 
+        }
+        .method-group {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .method-group h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .signaling-area {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .peer-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .connection-state {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="peer-indicator">PEER 1 (Caller)</div>
+    
+    <div class="container">
+        <h1>📡 WebRTC RPC Peer 1 (Caller)</h1>
+        <p>This peer will create an offer and establish a direct P2P connection with Peer 2.</p>
+        
+        <div id="status" class="status disconnected">
+            Not connected - Set up WebRTC connection first
+        </div>
+        <div id="connectionState" class="connection-state">Connection State: new</div>
+    </div>
+
+    <div class="container signaling-area">
+        <h3>🔄 WebRTC Signaling</h3>
+        <p><strong>Instructions:</strong></p>
+        <ol>
+            <li>Click "Create Offer" to generate an offer</li>
+            <li>Copy the offer and paste it in Peer 2's "Remote Offer" field</li>
+            <li>Click "Set Answer" in Peer 2, then copy the answer</li>
+            <li>Paste the answer here and click "Set Answer"</li>
+            <li>The peers should connect automatically!</li>
+        </ol>
+        
+        <div>
+            <button onclick="createOffer()" id="createOfferBtn">Create Offer</button>
+            <button onclick="copyOffer()" id="copyOfferBtn" disabled>Copy Offer</button>
+        </div>
+        
+        <div>
+            <label>Local Offer (share with Peer 2):</label>
+            <textarea id="localOffer" readonly placeholder="Offer will appear here..."></textarea>
+        </div>
+        
+        <div>
+            <label>Remote Answer (paste from Peer 2):</label>
+            <textarea id="remoteAnswer" placeholder="Paste answer from Peer 2 here..."></textarea>
+            <button onclick="setAnswer()" id="setAnswerBtn">Set Answer</button>
+        </div>
+    </div>
+
+    <div class="container method-group">
+        <h3>📞 RPC Methods</h3>
+        
+        <div>
+            <h4>Get User Info</h4>
+            <input type="text" id="getUserId" placeholder="User ID" value="peer1-user">
+            <button onclick="getUser()" disabled id="getUserBtn">Get User</button>
+        </div>
+        
+        <div>
+            <h4>Send Message</h4>
+            <input type="text" id="messageText" placeholder="Message" value="Hello from Peer 1!">
+            <button onclick="sendMessage()" disabled id="sendMessageBtn">Send Message</button>
+        </div>
+        
+        <div>
+            <h4>Calculate</h4>
+            <select id="operation">
+                <option value="add">Add</option>
+                <option value="multiply">Multiply</option>
+            </select>
+            <input type="number" id="numA" placeholder="A" value="15">
+            <input type="number" id="numB" placeholder="B" value="25">
+            <button onclick="calculate()" disabled id="calculateBtn">Calculate</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📋 Results</h3>
+        <button onclick="clearResults()" class="secondary">Clear Results</button>
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { Channel, defineMethod, createTypedInvoker, WebRTCPeerConnection, createWebRTCTransport } from '../../src/index.ts';
+        import { z } from 'https://esm.sh/zod@3.22.4';
+
+        let peerConnection = null;
+        let channel = null;
+        let dataChannel = null;
+        let isConnected = false;
+
+        // Define RPC methods
+        const getUserMethod = {
+            id: 'user.info',
+            input: z.object({ userId: z.string() }),
+            output: z.object({ id: z.string(), name: z.string(), peer: z.string(), timestamp: z.string() }),
+            handler: async () => { throw new Error('Client-side handler'); }
+        };
+
+        const messageMethod = {
+            id: 'message.send',
+            input: z.object({ message: z.string() }),
+            output: z.object({ received: z.string(), echo: z.string(), from: z.string() }),
+            handler: async () => { throw new Error('Client-side handler'); }
+        };
+
+        const calculateMethod = {
+            id: 'math.operation',
+            input: z.object({ operation: z.enum(['add', 'multiply']), a: z.number(), b: z.number() }),
+            output: z.object({ result: z.number(), operation: z.string(), peer: z.string() }),
+            handler: async () => { throw new Error('Client-side handler'); }
+        };
+
+        // Create typed invokers
+        let getUser, sendMessage, calculate;
+
+        // Initialize WebRTC
+        function initWebRTC() {
+            peerConnection = new WebRTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            // Monitor connection state
+            peerConnection.onConnectionStateChange((state) => {
+                document.getElementById('connectionState').textContent = `Connection State: ${state}`;
+                
+                if (state === 'connected') {
+                    updateStatus('connected', 'Connected to Peer 2 via WebRTC');
+                    toggleRPCButtons(true);
+                } else if (state === 'failed' || state === 'disconnected') {
+                    updateStatus('disconnected', 'WebRTC connection failed or disconnected');
+                    toggleRPCButtons(false);
+                }
+            });
+
+            // Handle data channel
+            peerConnection.onDataChannel((channel) => {
+                setupDataChannel(channel);
+            });
+        }
+
+        function setupDataChannel(dc) {
+            dataChannel = dc;
+            
+            dataChannel.addEventListener('open', async () => {
+                console.log('Data channel opened');
+                
+                // Create RPC channel
+                const transport = createWebRTCTransport(dataChannel);
+                channel = new Channel(transport, 'peer1');
+                
+                // Register local methods that peer2 can call
+                channel.publishMethod(defineMethod({
+                    id: 'ping',
+                    input: z.object({ message: z.string() }),
+                    output: z.object({ pong: z.string(), from: z.string() }),
+                    handler: async (input) => {
+                        return {
+                            pong: `Pong: ${input.message}`,
+                            from: 'peer1'
+                        };
+                    }
+                }));
+                
+                await channel.connect();
+                
+                // Create typed invokers for calling peer2 methods
+                getUser = createTypedInvoker(getUserMethod, channel.invoke.bind(channel));
+                sendMessage = createTypedInvoker(messageMethod, channel.invoke.bind(channel));
+                calculate = createTypedInvoker(calculateMethod, channel.invoke.bind(channel));
+                
+                isConnected = true;
+            });
+            
+            dataChannel.addEventListener('close', () => {
+                console.log('Data channel closed');
+                isConnected = false;
+                toggleRPCButtons(false);
+            });
+        }
+
+        window.createOffer = async function() {
+            if (!peerConnection) initWebRTC();
+            
+            try {
+                const offer = await peerConnection.createOffer();
+                document.getElementById('localOffer').value = JSON.stringify(offer, null, 2);
+                document.getElementById('copyOfferBtn').disabled = false;
+                updateStatus('connecting', 'Offer created - share with Peer 2');
+            } catch (error) {
+                displayError('Create Offer', error);
+            }
+        };
+
+        window.copyOffer = function() {
+            const offer = document.getElementById('localOffer').value;
+            navigator.clipboard.writeText(offer);
+            displayResult('Copy', 'Offer copied to clipboard!');
+        };
+
+        window.setAnswer = async function() {
+            try {
+                const answerText = document.getElementById('remoteAnswer').value;
+                const answer = JSON.parse(answerText);
+                await peerConnection.handleAnswer(answer);
+                updateStatus('connecting', 'Answer set - waiting for connection...');
+            } catch (error) {
+                displayError('Set Answer', error);
+            }
+        };
+
+        window.getUser = async function() {
+            if (!isConnected) return;
+            
+            try {
+                const userId = document.getElementById('getUserId').value;
+                const result = await getUser('peer2', { userId });
+                displayResult('Get User', result);
+            } catch (error) {
+                displayError('Get User', error);
+            }
+        };
+
+        window.sendMessage = async function() {
+            if (!isConnected) return;
+            
+            try {
+                const message = document.getElementById('messageText').value;
+                const result = await sendMessage('peer2', { message });
+                displayResult('Send Message', result);
+            } catch (error) {
+                displayError('Send Message', error);
+            }
+        };
+
+        window.calculate = async function() {
+            if (!isConnected) return;
+            
+            try {
+                const operation = document.getElementById('operation').value;
+                const a = parseFloat(document.getElementById('numA').value);
+                const b = parseFloat(document.getElementById('numB').value);
+                const result = await calculate('peer2', { operation, a, b });
+                displayResult('Calculate', result);
+            } catch (error) {
+                displayError('Calculate', error);
+            }
+        };
+
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        function updateStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        function toggleRPCButtons(enabled) {
+            const buttons = ['getUserBtn', 'sendMessageBtn', 'calculateBtn'];
+            buttons.forEach(id => {
+                document.getElementById(id).disabled = !enabled;
+            });
+        }
+
+        function displayResult(method, result) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.innerHTML = `<strong>${method}:</strong>\n${JSON.stringify(result, null, 2)}`;
+            results.insertBefore(div, results.firstChild);
+        }
+
+        function displayError(method, error) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = 'result error';
+            div.innerHTML = `<strong>${method} Error:</strong>\n${error.message || error}`;
+            results.insertBefore(div, results.firstChild);
+        }
+
+        // Initialize on load
+        console.log('Peer 1 initialized');
+    </script>
+</body>
+</html>

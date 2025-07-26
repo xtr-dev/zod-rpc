@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket RPC Example</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f5f5f5;
+        }
+        .container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status { 
+            padding: 10px; 
+            border-radius: 4px; 
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .connecting { background: #fff3cd; color: #856404; }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin: 5px; 
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        input, select { 
+            padding: 8px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            margin: 5px; 
+        }
+        .result { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            padding: 10px; 
+            border-radius: 4px; 
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        .error { 
+            background: #f8d7da; 
+            border: 1px solid #f5c6cb; 
+            color: #721c24; 
+        }
+        .method-group {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .method-group h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .chat-container {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: #f9f9f9;
+            margin: 10px 0;
+        }
+        .chat-message {
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-radius: 4px;
+        }
+        .chat-username {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .chat-timestamp {
+            font-size: 0.8em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket RPC Example</h1>
+        <p>This example demonstrates real-time RPC communication using WebSockets with zod-rpc.</p>
+        
+        <div id="status" class="status disconnected">
+            Disconnected - Click Connect to start
+        </div>
+        
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+    </div>
+
+    <div class="container method-group">
+        <h3>👤 User Management</h3>
+        
+        <div>
+            <h4>Get User</h4>
+            <input type="text" id="getUserId" placeholder="User ID" value="123">
+            <button onclick="getUser()" disabled id="getUserBtn">Get User</button>
+        </div>
+        
+        <div>
+            <h4>Create User</h4>
+            <input type="text" id="createUserName" placeholder="Name" value="John Doe">
+            <input type="email" id="createUserEmail" placeholder="Email" value="john@example.com">
+            <button onclick="createUser()" disabled id="createUserBtn">Create User</button>
+        </div>
+    </div>
+
+    <div class="container method-group">
+        <h3>🧮 Calculator</h3>
+        <select id="operation">
+            <option value="add">Add</option>
+            <option value="subtract">Subtract</option>
+            <option value="multiply">Multiply</option>
+            <option value="divide">Divide</option>
+        </select>
+        <input type="number" id="numA" placeholder="Number A" value="10">
+        <input type="number" id="numB" placeholder="Number B" value="5">
+        <button onclick="calculate()" disabled id="calculateBtn">Calculate</button>
+    </div>
+
+    <div class="container method-group">
+        <h3>💬 Chat</h3>
+        <input type="text" id="chatUsername" placeholder="Username" value="User1">
+        <input type="text" id="chatMessage" placeholder="Message" onkeypress="if(event.key==='Enter') sendChatMessage()">
+        <button onclick="sendChatMessage()" disabled id="chatBtn">Send</button>
+        
+        <div id="chatContainer" class="chat-container"></div>
+    </div>
+
+    <div class="container">
+        <h3>📋 Results</h3>
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { Channel, defineMethod, createTypedInvoker, createWebSocketTransport } from '../../src/index.ts';
+        import { z } from 'https://esm.sh/zod@3.22.4';
+
+        let channel = null;
+        let isConnected = false;
+
+        // Define method schemas (same as server)
+        const getUserMethod = {
+            id: 'user.get',
+            input: z.object({ userId: z.string() }),
+            output: z.object({ id: z.string(), name: z.string(), email: z.string() }),
+            handler: async () => { throw new Error('Client-side handler'); }
+        };
+
+        const createUserMethod = {
+            id: 'user.create',
+            input: z.object({ name: z.string(), email: z.string().email() }),
+            output: z.object({ id: z.string(), name: z.string(), email: z.string(), createdAt: z.string() }),
+            handler: async () => { throw new Error('Client-side handler'); }
+        };
+
+        const calculateMethod = {
+            id: 'math.calculate',
+            input: z.object({ operation: z.enum(['add', 'subtract', 'multiply', 'divide']), a: z.number(), b: z.number() }),
+            output: z.object({ result: z.number(), operation: z.string() }),
+            handler: async () => { throw new Error('Client-side handler'); }
+        };
+
+        const chatMethod = {
+            id: 'chat.message',
+            input: z.object({ message: z.string(), username: z.string() }),
+            output: z.object({ id: z.string(), message: z.string(), username: z.string(), timestamp: z.string() }),
+            handler: async () => { throw new Error('Client-side handler'); }
+        };
+
+        // Create typed invokers
+        let getUser, createUser, calculate, sendChat;
+
+        window.connect = async function() {
+            try {
+                updateStatus('connecting', 'Connecting...');
+                
+                const transport = createWebSocketTransport('ws://localhost:8080');
+                channel = new Channel(transport, 'ws-client');
+                
+                await channel.connect();
+                
+                // Create typed invokers
+                getUser = createTypedInvoker(getUserMethod, channel.invoke.bind(channel));
+                createUser = createTypedInvoker(createUserMethod, channel.invoke.bind(channel));
+                calculate = createTypedInvoker(calculateMethod, channel.invoke.bind(channel));
+                sendChat = createTypedInvoker(chatMethod, channel.invoke.bind(channel));
+                
+                isConnected = true;
+                updateStatus('connected', 'Connected to WebSocket RPC Server');
+                toggleButtons(true);
+                
+            } catch (error) {
+                console.error('Connection failed:', error);
+                updateStatus('disconnected', `Connection failed: ${error.message}`);
+                toggleButtons(false);
+            }
+        };
+
+        window.disconnect = async function() {
+            if (channel) {
+                await channel.disconnect();
+                channel = null;
+            }
+            isConnected = false;
+            updateStatus('disconnected', 'Disconnected');
+            toggleButtons(false);
+        };
+
+        window.getUser = async function() {
+            if (!isConnected) return;
+            
+            try {
+                const userId = document.getElementById('getUserId').value;
+                const result = await getUser('ws-server', { userId });
+                displayResult('Get User', result);
+            } catch (error) {
+                displayError('Get User', error);
+            }
+        };
+
+        window.createUser = async function() {
+            if (!isConnected) return;
+            
+            try {
+                const name = document.getElementById('createUserName').value;
+                const email = document.getElementById('createUserEmail').value;
+                const result = await createUser('ws-server', { name, email });
+                displayResult('Create User', result);
+            } catch (error) {
+                displayError('Create User', error);
+            }
+        };
+
+        window.calculate = async function() {
+            if (!isConnected) return;
+            
+            try {
+                const operation = document.getElementById('operation').value;
+                const a = parseFloat(document.getElementById('numA').value);
+                const b = parseFloat(document.getElementById('numB').value);
+                const result = await calculate('ws-server', { operation, a, b });
+                displayResult('Calculate', result);
+            } catch (error) {
+                displayError('Calculate', error);
+            }
+        };
+
+        window.sendChatMessage = async function() {
+            if (!isConnected) return;
+            
+            try {
+                const username = document.getElementById('chatUsername').value;
+                const message = document.getElementById('chatMessage').value;
+                
+                if (!message.trim()) return;
+                
+                const result = await sendChat('ws-server', { username, message });
+                displayChatMessage(result);
+                document.getElementById('chatMessage').value = '';
+            } catch (error) {
+                displayError('Chat', error);
+            }
+        };
+
+        function updateStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        function toggleButtons(enabled) {
+            const buttons = ['getUserBtn', 'createUserBtn', 'calculateBtn', 'chatBtn'];
+            buttons.forEach(id => {
+                document.getElementById(id).disabled = !enabled;
+            });
+            document.getElementById('connectBtn').disabled = enabled;
+            document.getElementById('disconnectBtn').disabled = !enabled;
+        }
+
+        function displayResult(method, result) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.innerHTML = `<strong>${method}:</strong>\n${JSON.stringify(result, null, 2)}`;
+            results.insertBefore(div, results.firstChild);
+        }
+
+        function displayError(method, error) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = 'result error';
+            div.innerHTML = `<strong>${method} Error:</strong>\n${error.message || error}`;
+            results.insertBefore(div, results.firstChild);
+        }
+
+        function displayChatMessage(message) {
+            const container = document.getElementById('chatContainer');
+            const div = document.createElement('div');
+            div.className = 'chat-message';
+            
+            const timestamp = new Date(message.timestamp).toLocaleTimeString();
+            div.innerHTML = `
+                <span class="chat-username">${message.username}:</span>
+                ${message.message}
+                <div class="chat-timestamp">${timestamp}</div>
+            `;
+            
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Make functions globally available
+        window.z = z;
+    </script>
+</body>
+</html>
