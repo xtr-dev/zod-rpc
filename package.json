@@ -1,5 +1,5 @@
 {
-  "name": "zod-rpc",
+  "name": "@xtr-dev/zod-rpc",
   "version": "0.1.0",
   "description": "A TypeScript RPC library built with Zod for type-safe remote procedure calls",
   "main": "dist/index.js",
@@ -27,18 +27,23 @@
     "typescript",
     "validation",
     "schema",
-    "remote-procedure-call"
+    "remote-procedure-call",
+    "websocket",
+    "webrtc",
+    "http",
+    "type-safe",
+    "runtime-validation"
   ],
-  "author": "",
+  "author": "xtr.dev <contact@xtr.dev>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/xtr-dev/zod-rpc.git"
   },
   "bugs": {
-    "url": ""
+    "url": "https://github.com/xtr-dev/zod-rpc/issues"
   },
-  "homepage": "",
+  "homepage": "https://github.com/xtr-dev/zod-rpc#readme",
   "dependencies": {
     "zod": "^4.0.10"
   },
