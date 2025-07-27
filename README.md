@@ -21,15 +21,112 @@
 - 🎯 **Service Introspection**: Query available methods and services
 - 📋 **Message Tracing**: Built-in tracing with `callerId`, `targetId`, and `traceId`
 
+## Core Concepts
+
+**zod-rpc** is built around a few core concepts:
+
+- **Methods**: These are the remote procedures that you can call. They are defined with Zod schemas for input and output validation.
+- **Contracts**: Contracts define the shape of your methods, without the implementation. This allows you to share the contract between the client and server, ensuring type safety.
+- **Transports**: Transports are responsible for sending and receiving messages. zod-rpc comes with built-in transports for WebSocket, WebRTC, and HTTP.
+- **Channels**: Channels are the central communication hub. They manage the connection, and allow you to publish methods and invoke remote methods.
+- **Services**: A service is a collection of methods. You can use services to group related methods together.
+
 ## 🚀 Quick Start
 
-### Installation
+### Prerequisites
 
-```bash
-npm install zod-rpc zod
-```
+Make sure you have Node.js version 16 or higher installed.
 
-### Basic Usage
+
+
+### Getting Started
+
+1.  **Initialize your project**
+
+    ```bash
+    npm init -y
+    npm install typescript zod zod-rpc
+    npx tsc --init
+    ```
+
+2.  **Create a `server.ts` file**
+
+    ```typescript
+    // server.ts
+    import { z } from 'zod';
+    import { defineMethod, Channel, createWebSocketTransport } from 'zod-rpc';
+
+    const getUserMethod = defineMethod({
+      id: 'user.get',
+      input: z.object({ userId: z.string() }),
+      output: z.object({ name: z.string(), email: z.string() }),
+      handler: async (input) => ({
+        name: `User ${input.userId}`,
+        email: `user${input.userId}@example.com`
+      })
+    });
+
+    const transport = createWebSocketTransport('ws://localhost:8080');
+    const channel = new Channel(transport, 'my-service');
+
+    channel.publishMethod(getUserMethod);
+
+    channel.connect();
+    ```
+
+3.  **Create a `client.ts` file**
+
+    ```typescript
+    // client.ts
+    import { z } from 'zod';
+    import { createTypedInvoker, Channel, createWebSocketTransport } from 'zod-rpc';
+    import { userContract } from './shared/contracts'; // Assuming you have a shared contract
+
+    const transport = createWebSocketTransport('ws://localhost:8080');
+    const channel = new Channel(transport, 'my-client');
+
+    const getUser = createTypedInvoker(userContract, channel.invoke.bind(channel));
+
+    async function main() {
+      await channel.connect();
+      const user = await getUser('my-service', { userId: '123' });
+      console.log(user);
+    }
+
+    main();
+    ```
+
+4.  **Create a `shared/contracts.ts` file**
+
+    ```typescript
+    // shared/contracts.ts
+    import { z } from 'zod';
+    import { defineContract } from 'zod-rpc';
+
+    export const userContract = defineContract({
+      id: 'user.get',
+      input: z.object({ userId: z.string() }),
+      output: z.object({ name: z.string(), email: z.string() })
+    });
+    ```
+
+5.  **Update your `tsconfig.json`**
+
+    ```json
+    {
+      "compilerOptions": {
+        "outDir": "./dist"
+      }
+    }
+    ```
+
+6.  **Run your server and client**
+
+    ```bash
+    npx tsc
+    node dist/server.js
+    node dist/client.js
+    ```
 
 ```typescript
 import { z } from 'zod';
@@ -155,34 +252,9 @@ npm run example:dev
 # Visit: http://localhost:3001/http/client.html
 ```
 
-## 🏗️ Architecture
 
-zod-rpc provides a unified RPC interface across different transport protocols:
 
-- **Method Definition**: Type-safe method definitions with Zod validation
-- **Channel**: Central communication hub for method calls and responses  
-- **Transports**: Pluggable transport layer (WebSocket/WebRTC/HTTP)
-- **Service Introspection**: APIs to query available methods and connected services
-- **Error Handling**: Comprehensive error types with proper propagation
 
-## 📖 Documentation
-
-- [WebSocket Example](./examples/websocket/README.md) - Real-time communication
-- [WebRTC Example](./examples/webrtc/README.md) - Peer-to-peer communication  
-- [HTTP Example](./examples/http/README.md) - Traditional REST-like APIs
-
-## 🧪 Testing
-
-The library has **92.33% test coverage** with comprehensive unit and integration tests:
-
-```bash
-npm test                # Run tests
-npx jest --coverage     # Run with coverage report
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 

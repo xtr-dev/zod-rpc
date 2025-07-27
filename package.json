@@ -14,12 +14,16 @@
     "coverage": "jest --coverage",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
+    "lint:fix": "npm run lint -- --fix && npm run format",
     "prepublishOnly": "npm run build",
+    "start": "npm run dev",
+    "test:watch": "jest --watch",
     "example:contracts:server": "npm run build && node dist/examples/contracts/server.js",
     "example:contracts:client": "npm run build && node dist/examples/contracts/client.js",
     "example:http:server": "npm run build && node dist/examples/http/server.js",
     "example:websocket:server": "npm run build && node dist/examples/websocket/server.js",
-    "example:dev": "npm run build && vite"
+    "example:dev": "npm run build && vite",
+    "prepare": "husky"
   },
   "keywords": [
     "rpc",
@@ -44,6 +48,12 @@
     "url": "https://github.com/xtr-dev/zod-rpc/issues"
   },
   "homepage": "https://github.com/xtr-dev/zod-rpc#readme",
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
   "dependencies": {
     "zod": "^4.0.10"
   },
@@ -54,7 +64,9 @@
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "eslint": "^9.32.0",
+    "husky": "^9.1.7",
     "jest": "^30.0.5",
+    "lint-staged": "^16.1.2",
     "prettier": "^3.6.2",
     "ts-jest": "^29.4.0",
     "typescript": "^5.8.3",
