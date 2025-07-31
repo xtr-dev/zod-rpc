@@ -11,6 +11,9 @@ export class WebSocketTransport implements Transport {
     private websocket: WebSocket,
     private autoReconnect = true,
   ) {
+    if (!websocket) {
+      throw new Error('WebSocket instance is required');
+    }
     this.setupEventHandlers();
   }
 
@@ -119,6 +122,16 @@ export function createWebSocketTransport(
   protocols?: string | string[],
   autoReconnect = true,
 ): WebSocketTransport {
-  const websocket = new WebSocket(url, protocols);
-  return new WebSocketTransport(websocket, autoReconnect);
+  if (!url) {
+    throw new Error('WebSocket URL is required');
+  }
+
+  try {
+    const websocket = new WebSocket(url, protocols);
+    return new WebSocketTransport(websocket, autoReconnect);
+  } catch (error) {
+    throw new Error(
+      `Failed to create WebSocket: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+  }
 }

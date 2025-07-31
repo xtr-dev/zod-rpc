@@ -1,36 +1,38 @@
 import { z, ZodSchema } from 'zod';
-import { 
-  RPCMessage, 
-  MethodDefinition, 
-  MethodInfo, 
-  ServiceInfo, 
-  Transport 
-} from './types';
-import { 
-  RPCError, 
-  ValidationError, 
-  MethodNotFoundError, 
-  TimeoutError 
-} from './errors';
+import { RPCMessage, MethodDefinition, MethodInfo, ServiceInfo, Transport } from './types';
+import { RPCError, ValidationError, MethodNotFoundError, TimeoutError } from './errors';
 
 export class Channel {
   private methods = new Map<string, MethodDefinition<any, any>>();
-  private pendingCalls = new Map<string, {
-    resolve: (value: any) => void;
-    reject: (error: Error) => void;
-    timeout: NodeJS.Timeout;
-  }>();
+  private pendingCalls = new Map<
+    string,
+    {
+      resolve: (value: any) => void;
+      reject: (error: Error) => void;
+      timeout: ReturnType<typeof setTimeout>;
+    }
+  >();
   private services = new Map<string, ServiceInfo>();
 
   constructor(
     private transport: Transport,
     private serviceId: string,
-    private defaultTimeout: number = 30000
+    private defaultTimeout: number = 30000,
   ) {
+    if (!transport) {
+      throw new Error(
+        'Channel constructor requires a valid transport. Did you forget to pass a transport instance?',
+      );
+    }
     this.transport.onMessage(this.handleMessage.bind(this));
   }
 
   async connect(): Promise<void> {
+    if (!this.transport) {
+      throw new Error(
+        'Transport is null. This should not happen if Channel was constructed properly.',
+      );
+    }
     await this.transport.connect();
     await this.publishServiceInfo();
   }
@@ -45,7 +47,7 @@ export class Channel {
   }
 
   publishMethod<T extends ZodSchema, U extends ZodSchema>(
-    definition: MethodDefinition<T, U>
+    definition: MethodDefinition<T, U>,
   ): void {
     this.methods.set(definition.id, definition);
   }
@@ -56,10 +58,10 @@ export class Channel {
     input: z.infer<T>,
     inputSchema?: T,
     outputSchema?: U,
-    timeout?: number
+    timeout?: number,
   ): Promise<z.infer<U>> {
     const traceId = this.generateTraceId();
-    
+
     if (inputSchema) {
       try {
         inputSchema.parse(input);
@@ -74,7 +76,7 @@ export class Channel {
       traceId,
       methodId,
       payload: input,
-      type: 'request'
+      type: 'request',
     };
 
     return new Promise<z.infer<U>>((resolve, reject) => {
@@ -98,7 +100,7 @@ export class Channel {
           }
         },
         reject,
-        timeout: timeoutHandle
+        timeout: timeoutHandle,
       });
 
       this.transport.send(message).catch(reject);
@@ -134,12 +136,9 @@ export class Channel {
 
   private async handleRequest(message: RPCMessage): Promise<void> {
     const method = this.methods.get(message.methodId);
-    
+
     if (!method) {
-      await this.sendError(
-        message,
-        new MethodNotFoundError(message.methodId, message.traceId)
-      );
+      await this.sendError(message, new MethodNotFoundError(message.methodId, message.traceId));
       return;
     }
 
@@ -154,7 +153,7 @@ export class Channel {
         traceId: message.traceId,
         methodId: message.methodId,
         payload: validatedOutput,
-        type: 'response'
+        type: 'response',
       };
 
       await this.transport.send(response);
@@ -166,9 +165,9 @@ export class Channel {
         rpcError = new ValidationError(error.message, message.traceId);
       } else {
         rpcError = new RPCError(
-          'INTERNAL_ERROR', 
+          'INTERNAL_ERROR',
           error instanceof Error ? error.message : 'Unknown error',
-          message.traceId
+          message.traceId,
         );
       }
 
@@ -190,13 +189,13 @@ export class Channel {
     if (pending) {
       clearTimeout(pending.timeout);
       this.pendingCalls.delete(message.traceId);
-      
+
       const error = new RPCError(
         (message.payload as any)?.code || 'UNKNOWN_ERROR',
         (message.payload as any)?.message || 'Unknown error occurred',
-        message.traceId
+        message.traceId,
       );
-      
+
       pending.reject(error);
     }
   }
@@ -208,7 +207,7 @@ export class Channel {
       traceId: originalMessage.traceId,
       methodId: originalMessage.methodId,
       payload: error.toJSON(),
-      type: 'error'
+      type: 'error',
     };
 
     try {
@@ -219,14 +218,14 @@ export class Channel {
   }
 
   private async publishServiceInfo(): Promise<void> {
-    const methods: MethodInfo[] = Array.from(this.methods.values()).map(method => ({
+    const methods: MethodInfo[] = Array.from(this.methods.values()).map((method) => ({
       id: method.id,
-      name: method.id.split('.').pop() || method.id
+      name: method.id.split('.').pop() || method.id,
     }));
 
     const serviceInfo: ServiceInfo = {
       id: this.serviceId,
-      methods
+      methods,
     };
 
     this.services.set(this.serviceId, serviceInfo);

@@ -1,6 +1,6 @@
 {
   "name": "@xtr-dev/zod-rpc",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A TypeScript RPC library built with Zod for type-safe remote procedure calls",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
