@@ -9,7 +9,7 @@ export class WebSocketTransport implements Transport {
 
   constructor(
     private websocket: WebSocket,
-    private autoReconnect = true
+    private autoReconnect = true,
   ) {
     this.setupEventHandlers();
   }
@@ -23,7 +23,7 @@ export class WebSocketTransport implements Transport {
       this.websocket.send(JSON.stringify(message));
     } catch (error) {
       throw new TransportError(
-        `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -46,7 +46,7 @@ export class WebSocketTransport implements Transport {
         resolve();
       };
 
-      const onError = (event: Event): void => {
+      const onError = (_event: Event): void => {
         this.websocket.removeEventListener('open', onOpen);
         this.websocket.removeEventListener('error', onError);
         reject(new TransportError('Failed to connect to WebSocket'));
@@ -90,9 +90,12 @@ export class WebSocketTransport implements Transport {
 
     this.websocket.addEventListener('close', () => {
       if (this.autoReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-        setTimeout(() => {
-          this.attemptReconnect();
-        }, this.reconnectDelay * Math.pow(2, this.reconnectAttempts));
+        setTimeout(
+          () => {
+            this.attemptReconnect();
+          },
+          this.reconnectDelay * Math.pow(2, this.reconnectAttempts),
+        );
       }
     });
 
@@ -114,7 +117,7 @@ export class WebSocketTransport implements Transport {
 export function createWebSocketTransport(
   url: string,
   protocols?: string | string[],
-  autoReconnect = true
+  autoReconnect = true,
 ): WebSocketTransport {
   const websocket = new WebSocket(url, protocols);
   return new WebSocketTransport(websocket, autoReconnect);

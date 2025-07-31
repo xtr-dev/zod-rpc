@@ -1,14 +1,27 @@
 {
   "name": "@xtr-dev/zod-rpc",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A TypeScript RPC library built with Zod for type-safe remote procedure calls",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    },
+    "./transports": {
+      "types": "./dist/transports/index.d.ts",
+      "require": "./dist/transports/index.js",
+      "import": "./dist/transports/index.js"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsc",
+    "build:examples": "tsc -p tsconfig.examples.json",
     "dev": "tsc --watch",
     "test": "jest",
     "coverage": "jest --coverage",
@@ -18,11 +31,11 @@
     "prepublishOnly": "npm run build",
     "start": "npm run dev",
     "test:watch": "jest --watch",
-    "example:contracts:server": "npm run build && node dist/examples/contracts/server.js",
-    "example:contracts:client": "npm run build && node dist/examples/contracts/client.js",
-    "example:http:server": "npm run build && node dist/examples/http/server.js",
-    "example:websocket:server": "npm run build && node dist/examples/websocket/server.js",
-    "example:dev": "npm run build && vite",
+    "example:contracts:server": "npm run build:examples && node dist/examples/contracts/server.js",
+    "example:contracts:client": "npm run build:examples && node dist/examples/contracts/client.js",
+    "example:http:server": "npm run build:examples && node dist/examples/http/server.js",
+    "example:websocket:server": "npm run build:examples && node dist/examples/websocket/server.js",
+    "example:dev": "npm run build:examples && vite",
     "prepare": "husky"
   },
   "keywords": [
@@ -39,7 +52,7 @@
     "runtime-validation"
   ],
   "author": "xtr.dev <contact@xtr.dev>",
-  "license": "MIT",
+  "license": "Public Domain",
   "repository": {
     "type": "git",
     "url": "https://github.com/xtr-dev/zod-rpc.git"
@@ -58,6 +71,7 @@
     "zod": "^4.0.10"
   },
   "devDependencies": {
+    "@eslint/js": "^9.32.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.1.0",
     "@types/ws": "^8.18.1",

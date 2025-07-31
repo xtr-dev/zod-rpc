@@ -7,7 +7,7 @@ declare global {
     send(data: string): void;
     close(): void;
   }
-  
+
   interface RTCPeerConnection extends EventTarget {
     createDataChannel(label: string, options?: any): RTCDataChannel;
     createOffer(): Promise<RTCSessionDescriptionInit>;
@@ -18,38 +18,44 @@ declare global {
     connectionState: RTCPeerConnectionState;
     close(): void;
   }
-  
+
   interface RTCSessionDescriptionInit {
     type: 'offer' | 'answer';
     sdp?: string;
   }
-  
+
   interface RTCIceCandidateInit {
     candidate?: string;
     sdpMLineIndex?: number;
     sdpMid?: string;
   }
-  
+
   interface RTCIceCandidate {
     candidate: string;
     sdpMLineIndex: number | null;
     sdpMid: string | null;
   }
-  
+
   interface RTCIceServer {
     urls: string | string[];
     username?: string;
     credential?: string;
   }
-  
+
   type RTCIceTransportPolicy = 'all' | 'relay';
   type RTCBundlePolicy = 'balanced' | 'max-compat' | 'max-bundle';
-  type RTCPeerConnectionState = 'closed' | 'connected' | 'connecting' | 'disconnected' | 'failed' | 'new';
-  
+  type RTCPeerConnectionState =
+    | 'closed'
+    | 'connected'
+    | 'connecting'
+    | 'disconnected'
+    | 'failed'
+    | 'new';
+
   const RTCPeerConnection: {
     new (config?: RTCConfiguration): RTCPeerConnection;
   };
-  
+
   interface RTCConfiguration {
     iceServers?: RTCIceServer[];
     iceTransportPolicy?: RTCIceTransportPolicy;
@@ -73,7 +79,7 @@ export class WebRTCTransport implements Transport {
       this.dataChannel.send(JSON.stringify(message));
     } catch (error) {
       throw new TransportError(
-        `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -95,7 +101,7 @@ export class WebRTCTransport implements Transport {
         resolve();
       };
 
-      const onError = (event: Event): void => {
+      const onError = (_event: Event): void => {
         this.dataChannel.removeEventListener('open', onOpen);
         this.dataChannel.removeEventListener('error', onError);
         reject(new TransportError('Failed to connect WebRTC DataChannel'));
@@ -164,27 +170,27 @@ export class WebRTCPeerConnection {
 
   async createOffer(channelLabel = 'rpc-channel'): Promise<RTCSessionDescriptionInit> {
     this.dataChannel = this.peerConnection.createDataChannel(channelLabel, {
-      ordered: true
+      ordered: true,
     });
 
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
-    
+
     // Ensure type field is present
     return {
       type: 'offer' as const,
-      sdp: offer.sdp
+      sdp: offer.sdp,
     };
   }
 
   async createAnswer(): Promise<RTCSessionDescriptionInit> {
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
-    
+
     // Ensure type field is present
     return {
       type: 'answer' as const,
-      sdp: answer.sdp
+      sdp: answer.sdp,
     };
   }
 

@@ -4,7 +4,7 @@
     "module": "CommonJS",
     "lib": ["ES2020"],
     "outDir": "./dist",
-    "rootDir": ".",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -17,8 +17,7 @@
     "moduleResolution": "node"
   },
   "include": [
-    "src/**/*",
-    "examples/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
