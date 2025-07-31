@@ -36,7 +36,7 @@
 ### Installation
 
 ```bash
-npm install zod-rpc zod
+npm install @xtr-dev/zod-rpc zod
 ```
 
 ### Basic Usage
