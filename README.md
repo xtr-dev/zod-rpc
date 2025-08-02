@@ -14,7 +14,6 @@
 
 ## ✨ Features
 
-- 🎯 **Simple API**: Define once, use everywhere with minimal boilerplate
 - 🔒 **Type Safety**: Full TypeScript support with automatic type inference
 - ⚡ **Runtime Validation**: Automatic input/output validation using Zod schemas
 - 🌐 **Multiple Transports**: WebSocket, HTTP, and WebRTC support
