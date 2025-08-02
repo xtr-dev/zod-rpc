@@ -141,12 +141,11 @@ export class HTTPTransport implements Transport {
  * // Create channel for local method invocation (no transport needed)
  * const channel = new Channel('server');
  *
- * // Implement services with targetId
- * const userMethods = implementService(userService, {
+ * // Implement and publish service (simplified API)
+ * channel.publishService(userService, {
  *   get: async ({ userId }) => ({ id: userId, name: 'John' }),
  *   create: async ({ name, email }) => ({ id: '123', success: true })
- * }, 'server');
- * userMethods.forEach(method => channel.publishMethod(method));
+ * });
  *
  * // Use middleware
  * app.use('/rpc', zodRpc(channel));

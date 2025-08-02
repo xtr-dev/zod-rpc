@@ -1,6 +1,7 @@
 import { z, ZodSchema } from 'zod';
 import { RPCMessage, MethodDefinition, MethodInfo, ServiceInfo, Transport } from './types';
 import { RPCError, ValidationError, MethodNotFoundError, TimeoutError } from './errors';
+import { ServiceDefinition, ServiceImplementation, implementService } from './service';
 
 /**
  * Core communication channel that manages RPC method calls, message routing, and transport connections.
@@ -79,6 +80,40 @@ export class Channel {
   ): void {
     const key = `${definition.targetId}:${definition.id}`;
     this.methods.set(key, definition);
+  }
+
+  /**
+   * Publish a service implementation to this channel, making all its methods available for RPC calls.
+   * This is a convenience method that combines implementService and publishMethod.
+   *
+   * @template T - Service methods record type
+   * @param service - The service definition with schemas
+   * @param implementation - The actual implementation functions
+   * @param targetId - Optional target identifier (defaults to channelId)
+   *
+   * @example
+   * ```typescript
+   * const channel = new Channel('server');
+   *
+   * // Instead of:
+   * // const methods = implementService(userService, implementation, 'server');
+   * // methods.forEach(method => channel.publishMethod(method));
+   *
+   * // Just do:
+   * channel.publishService(userService, {
+   *   get: async ({ userId }) => ({ name: `User ${userId}`, email: `user${userId}@example.com` }),
+   *   create: async ({ name, email }) => ({ id: '123', success: true })
+   * });
+   * ```
+   */
+  publishService<T extends Record<string, any>>(
+    service: ServiceDefinition<T>,
+    implementation: ServiceImplementation<T>,
+    targetId?: string,
+  ): void {
+    const actualTargetId = targetId || this.channelId;
+    const methods = implementService(service, implementation, actualTargetId);
+    methods.forEach((method) => this.publishMethod(method));
   }
 
   async invoke<T extends ZodSchema, U extends ZodSchema>(
