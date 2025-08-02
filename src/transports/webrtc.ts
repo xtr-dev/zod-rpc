@@ -1,68 +1,11 @@
 import { Transport, RPCMessage } from '../types';
 import { TransportError } from '../errors';
 
-declare global {
-  interface RTCDataChannel extends EventTarget {
-    readyState: 'connecting' | 'open' | 'closing' | 'closed';
-    send(data: string): void;
-    close(): void;
-  }
+// WebRTC types are now included in modern TypeScript/DOM libs
 
-  interface RTCPeerConnection extends EventTarget {
-    createDataChannel(label: string, options?: any): RTCDataChannel;
-    createOffer(): Promise<RTCSessionDescriptionInit>;
-    createAnswer(): Promise<RTCSessionDescriptionInit>;
-    setLocalDescription(description: RTCSessionDescriptionInit): Promise<void>;
-    setRemoteDescription(description: RTCSessionDescriptionInit): Promise<void>;
-    addIceCandidate(candidate: RTCIceCandidateInit): Promise<void>;
-    connectionState: RTCPeerConnectionState;
-    close(): void;
-  }
-
-  interface RTCSessionDescriptionInit {
-    type: 'offer' | 'answer';
-    sdp?: string;
-  }
-
-  interface RTCIceCandidateInit {
-    candidate?: string;
-    sdpMLineIndex?: number;
-    sdpMid?: string;
-  }
-
-  interface RTCIceCandidate {
-    candidate: string;
-    sdpMLineIndex: number | null;
-    sdpMid: string | null;
-  }
-
-  interface RTCIceServer {
-    urls: string | string[];
-    username?: string;
-    credential?: string;
-  }
-
-  type RTCIceTransportPolicy = 'all' | 'relay';
-  type RTCBundlePolicy = 'balanced' | 'max-compat' | 'max-bundle';
-  type RTCPeerConnectionState =
-    | 'closed'
-    | 'connected'
-    | 'connecting'
-    | 'disconnected'
-    | 'failed'
-    | 'new';
-
-  const RTCPeerConnection: {
-    new (config?: RTCConfiguration): RTCPeerConnection;
-  };
-
-  interface RTCConfiguration {
-    iceServers?: RTCIceServer[];
-    iceTransportPolicy?: RTCIceTransportPolicy;
-    bundlePolicy?: RTCBundlePolicy;
-  }
-}
-
+/**
+ * @group Transport Layer
+ */
 export class WebRTCTransport implements Transport {
   private messageHandler?: (message: RPCMessage) => void;
 
@@ -138,7 +81,7 @@ export class WebRTCTransport implements Transport {
   }
 
   private setupEventHandlers(): void {
-    this.dataChannel.addEventListener('message', (event: any) => {
+    this.dataChannel.addEventListener('message', (event: MessageEvent) => {
       try {
         const message: RPCMessage = JSON.parse(event.data);
         this.messageHandler?.(message);
@@ -147,18 +90,24 @@ export class WebRTCTransport implements Transport {
       }
     });
 
-    this.dataChannel.addEventListener('error', (event: any) => {
+    this.dataChannel.addEventListener('error', (event: Event) => {
       console.error('WebRTC DataChannel error:', event);
     });
   }
 }
 
+/**
+ * @group Transport Layer
+ */
 export interface WebRTCConfig {
   iceServers?: RTCIceServer[];
   iceTransportPolicy?: RTCIceTransportPolicy;
   bundlePolicy?: RTCBundlePolicy;
 }
 
+/**
+ * @group Transport Layer
+ */
 export class WebRTCPeerConnection {
   private peerConnection: RTCPeerConnection;
   private dataChannel?: RTCDataChannel;
@@ -211,13 +160,13 @@ export class WebRTCPeerConnection {
   }
 
   onIceCandidate(handler: (candidate: RTCIceCandidate | null) => void): void {
-    this.peerConnection.addEventListener('icecandidate', (event: any) => {
+    this.peerConnection.addEventListener('icecandidate', (event: RTCPeerConnectionIceEvent) => {
       handler(event.candidate);
     });
   }
 
   onDataChannel(handler: (channel: RTCDataChannel) => void): void {
-    this.peerConnection.addEventListener('datachannel', (event: any) => {
+    this.peerConnection.addEventListener('datachannel', (event: RTCDataChannelEvent) => {
       handler(event.channel);
     });
   }
@@ -246,7 +195,7 @@ export class WebRTCPeerConnection {
       console.log('WebRTC connection state:', this.peerConnection.connectionState);
     });
 
-    this.peerConnection.addEventListener('datachannel', (event: any) => {
+    this.peerConnection.addEventListener('datachannel', (event: RTCDataChannelEvent) => {
       if (!this.dataChannel) {
         this.dataChannel = event.channel;
       }
@@ -254,6 +203,9 @@ export class WebRTCPeerConnection {
   }
 }
 
+/**
+ * @group Transport Layer
+ */
 export function createWebRTCTransport(dataChannel: RTCDataChannel): WebRTCTransport {
   return new WebRTCTransport(dataChannel);
 }

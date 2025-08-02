@@ -1,0 +1,28 @@
+{
+  "name": "zod-rpc-websocket-example",
+  "version": "1.0.0",
+  "description": "WebSocket example demonstrating zod-rpc with real-time communication",
+  "main": "server.js",
+  "scripts": {
+    "build": "tsc",
+    "start:server": "npm run build && node dist/server.js",
+    "start:client": "npm run build && node dist/client.js",
+    "docs": "cd ../.. && node bin/zod-rpc-docs.js --source ./dist/examples/websocket/shared.js --dest ./examples/websocket/docs"
+  },
+  "keywords": [
+    "zod",
+    "rpc",
+    "websocket",
+    "typescript",
+    "example"
+  ],
+  "dependencies": {
+    "zod": "^4.0.10",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.8.3"
+  }
+}

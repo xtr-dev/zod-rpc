@@ -1,6 +1,23 @@
 import { RPCMessage, Transport } from '../types';
 import { TransportError } from '../errors';
+import type { Channel } from '../channel';
 
+// Express-like types for middleware compatibility
+interface Request {
+  method: string;
+  body?: any; // Optional for testing, required for actual usage
+}
+
+interface Response {
+  status(code: number): Response;
+  json(data: any): Response; // Keep flexible for chaining
+}
+
+type NextFunction = () => void;
+
+/**
+ * @group Transport Layer
+ */
 export interface HTTPTransportConfig {
   baseUrl: string;
   headers?: Record<string, string>;
@@ -8,15 +25,16 @@ export interface HTTPTransportConfig {
   fetch?: typeof globalThis.fetch;
 }
 
+/**
+ * @group Transport Layer
+ */
 export class HTTPTransport implements Transport {
   private messageHandler?: (message: RPCMessage) => void;
   private connected = false;
 
   constructor(private config: HTTPTransportConfig) {
     if (!config.fetch && typeof fetch === 'undefined') {
-      throw new TransportError(
-        'fetch is not available. Please provide a fetch implementation.'
-      );
+      throw new TransportError('fetch is not available. Please provide a fetch implementation.');
     }
   }
 
@@ -36,14 +54,12 @@ export class HTTPTransport implements Transport {
           ...this.config.headers,
         },
         body: JSON.stringify(message),
-        signal: this.config.timeout
-          ? AbortSignal.timeout(this.config.timeout)
-          : undefined,
+        signal: this.config.timeout ? AbortSignal.timeout(this.config.timeout) : undefined,
       });
 
       if (!response.ok) {
         throw new TransportError(
-          `HTTP request failed with status ${response.status}: ${response.statusText}`
+          `HTTP request failed with status ${response.status}: ${response.statusText}`,
         );
       }
 
@@ -84,9 +100,7 @@ export class HTTPTransport implements Transport {
       if (response.ok) {
         this.connected = true;
       } else {
-        throw new TransportError(
-          `Server health check failed: ${response.statusText}`
-        );
+        throw new TransportError(`Server health check failed: ${response.statusText}`);
       }
     } catch (error) {
       this.connected = false;
@@ -96,9 +110,7 @@ export class HTTPTransport implements Transport {
         errorMessage = error.message;
       }
 
-      throw new TransportError(
-        `Failed to connect to HTTP server: ${errorMessage}`
-      );
+      throw new TransportError(`Failed to connect to HTTP server: ${errorMessage}`);
     }
   }
 
@@ -111,80 +123,79 @@ export class HTTPTransport implements Transport {
   }
 }
 
-export class HTTPServer {
-  private methods = new Map<
-    string,
-    (message: RPCMessage) => Promise<RPCMessage>
-  >();
+/**
+ * Creates Express middleware for handling zod-rpc calls with a channel.
+ *
+ * @param channel - Channel with registered service implementations
+ * @returns Express middleware function
+ *
+ * @example
+ * ```typescript
+ * import express from 'express';
+ * import { zodRpc, Channel } from '@xtr-dev/zod-rpc';
+ * import { implementService } from '@xtr-dev/zod-rpc';
+ *
+ * const app = express();
+ * app.use(express.json());
+ *
+ * // Create channel for local method invocation (no transport needed)
+ * const channel = new Channel('server');
+ *
+ * // Implement services with targetId
+ * const userMethods = implementService(userService, {
+ *   get: async ({ userId }) => ({ id: userId, name: 'John' }),
+ *   create: async ({ name, email }) => ({ id: '123', success: true })
+ * }, 'server');
+ * userMethods.forEach(method => channel.publishMethod(method));
+ *
+ * // Use middleware
+ * app.use('/rpc', zodRpc(channel));
+ * ```
+ * @group HTTP Middleware
+ */
+export function zodRpc(
+  channel: Channel | { invoke: Function },
+): (req: Request, res: Response, next: NextFunction) => Promise<void> {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'POST') {
+      return next();
+    }
 
-  constructor(private port = 3000) {}
+    try {
+      const message: RPCMessage = req.body;
 
-  registerHandler(handler: (message: RPCMessage) => Promise<RPCMessage>): void {
-    this.methods.set('*', handler);
-  }
+      // Validate message structure
+      if (!message.methodId || !message.traceId || !message.callerId || !message.targetId) {
+        res.status(400).json({
+          error: 'Invalid RPC message',
+          message: 'Missing required fields: methodId, traceId, callerId, targetId',
+        });
+        return;
+      }
 
-  async start(): Promise<void> {
-    throw new Error(
-      'HTTPServer implementation requires a specific HTTP server framework (Express, Fastify, etc.)'
-    );
-  }
+      // Call method directly through channel
+      const result = await channel.invoke(message.targetId, message.methodId, message.payload);
 
-  async stop(): Promise<void> {
-    throw new Error(
-      'HTTPServer implementation requires a specific HTTP server framework (Express, Fastify, etc.)'
-    );
-  }
+      res.json({
+        callerId: message.targetId,
+        targetId: message.callerId,
+        traceId: message.traceId,
+        methodId: message.methodId,
+        payload: result,
+        type: 'response',
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'RPC handler error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
 }
 
-export function createHTTPTransport(
-  config: HTTPTransportConfig
-): HTTPTransport {
+/**
+ * @group Transport Layer
+ */
+export function createHTTPTransport(config: HTTPTransportConfig): HTTPTransport {
   return new HTTPTransport(config);
-}
-
-export interface HTTPServerAdapter {
-  start(port: number): Promise<void>;
-  stop(): Promise<void>;
-  onRequest(path: string, handler: (body: any) => Promise<any>): void;
-}
-
-export class HTTPChannelServer {
-  private messageHandler?: (message: RPCMessage) => Promise<RPCMessage>;
-
-  constructor(private adapter: HTTPServerAdapter) {
-    this.setupRoutes();
-  }
-
-  onMessage(handler: (message: RPCMessage) => Promise<RPCMessage>): void {
-    this.messageHandler = handler;
-  }
-
-  async start(port = 3000): Promise<void> {
-    await this.adapter.start(port);
-  }
-
-  async stop(): Promise<void> {
-    await this.adapter.stop();
-  }
-
-  private setupRoutes(): void {
-    this.adapter.onRequest('/rpc', async (body: any) => {
-      if (!this.messageHandler) {
-        throw new Error('No message handler registered');
-      }
-
-      try {
-        const message: RPCMessage = body;
-        return await this.messageHandler(message);
-      } catch (error) {
-        throw new Error(
-          `RPC handler error: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
-    });
-
-    this.adapter.onRequest('/health', async () => {
-      return { status: 'ok' };
-    });
-  }
 }

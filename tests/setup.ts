@@ -5,13 +5,12 @@ beforeAll(() => {
   // Suppress specific noisy console.error messages during tests
   console.error = (message: any, ...args: any[]) => {
     // Only suppress transport-related error messages
-    if (typeof message === 'string' && (
-      message.includes('WebSocket error:') || 
-      message.includes('WebRTC DataChannel error:')
-    )) {
+    if (
+      typeof message === 'string' &&
+      (message.includes('WebSocket error:') || message.includes('WebRTC DataChannel error:'))
+    ) {
       return; // Suppress these specific messages
     }
-    // Allow other console.error messages through (for tests that verify error logging)
     originalConsoleError(message, ...args);
   };
 });

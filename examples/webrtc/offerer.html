@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Offerer - Zod RPC</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #007FFF 0%, #FF6B35 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #007FFF;
+            margin-bottom: 20px;
+            font-size: 2rem;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(245, 222, 179, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 127, 255, 0.2);
+        }
+        .section h3 {
+            color: #2E8B57;
+            margin-top: 0;
+        }
+        button {
+            background: #FF6B35;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #e55a2b;
+            transform: scale(1.05);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin: 5px 0;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 120px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 6px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .message.sent {
+            background: #e3f2fd;
+            text-align: right;
+        }
+        .message.received {
+            background: #f3e5f5;
+        }
+        .copy-btn {
+            background: #2E8B57;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+        .copy-btn:hover {
+            background: #246b47;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 WebRTC Offerer</h1>
+        
+        <div class="section">
+            <h3>1. Connection Setup</h3>
+            <button id="createOffer">Create Offer</button>
+            <div id="connectionStatus" class="status" style="display: none;"></div>
+            
+            <div id="offerSection" style="display: none;">
+                <h4>Your Offer (send this to the answerer):</h4>
+                <textarea id="offerData" readonly></textarea>
+                <button class="copy-btn" onclick="copyToClipboard('offerData')">Copy Offer</button>
+            </div>
+            
+            <div id="answerSection" style="display: none;">
+                <h4>Paste the Answer from the answerer:</h4>
+                <textarea id="answerData" placeholder="Paste the answer JSON here..."></textarea>
+                <button id="setAnswer">Set Answer</button>
+            </div>
+        </div>
+
+        <div class="section" id="chatSection" style="display: none;">
+            <h3>2. RPC Communication</h3>
+            <div class="messages" id="messages"></div>
+            <input type="text" id="messageInput" placeholder="Type a message...">
+            <button id="sendMessage">Send Message</button>
+            <button id="pingButton">Send Ping</button>
+        </div>
+
+        <div class="section" id="fileSection" style="display: none;">
+            <h3>3. File Transfer</h3>
+            <input type="file" id="fileInput">
+            <button id="sendFile">Send File</button>
+            <div id="fileProgress" style="margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createRPCClient, WebRTCPeerConnection, createWebRTCTransport } from '@xtr-dev/zod-rpc';
+        import { chatService, fileService } from './shared.js';
+
+        class WebRTCOfferer {
+            constructor() {
+                this.peerConnection = new WebRTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                });
+                this.client = null;
+                this.setupEventListeners();
+                this.setupPeerConnectionHandlers();
+            }
+
+            setupEventListeners() {
+                document.getElementById('createOffer').addEventListener('click', () => this.createOffer());
+                document.getElementById('setAnswer').addEventListener('click', () => this.setAnswer());
+                document.getElementById('sendMessage').addEventListener('click', () => this.sendMessage());
+                document.getElementById('pingButton').addEventListener('click', () => this.sendPing());
+                document.getElementById('sendFile').addEventListener('click', () => this.sendFile());
+                document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendMessage();
+                });
+            }
+
+            setupPeerConnectionHandlers() {
+                this.peerConnection.onConnectionStateChange((state) => {
+                    this.updateStatus(`Connection state: ${state}`, 
+                        state === 'connected' ? 'connected' : 'connecting');
+                    
+                    if (state === 'connected') {
+                        document.getElementById('chatSection').style.display = 'block';
+                        document.getElementById('fileSection').style.display = 'block';
+                    }
+                });
+
+                this.peerConnection.onDataChannel((channel) => {
+                    const transport = createWebRTCTransport(channel);
+                    this.client = createRPCClient([chatService, fileService], transport);
+                    this.setupRPCHandlers();
+                });
+            }
+
+            setupRPCHandlers() {
+                this.client.chatService.sendMessage.onNotification((data) => {
+                    this.addMessage(`Received: ${data.message}`, 'received');
+                });
+
+                this.client.chatService.ping.onNotification((data) => {
+                    const latency = Date.now() - data.timestamp;
+                    this.addMessage(`Ping received, responding with pong (latency: ${latency}ms)`, 'received');
+                    this.client.chatService.ping.call({ timestamp: Date.now() });
+                });
+            }
+
+            async createOffer() {
+                try {
+                    this.updateStatus('Creating offer...', 'connecting');
+                    const offer = await this.peerConnection.createOffer();
+                    
+                    document.getElementById('offerData').value = JSON.stringify(offer, null, 2);
+                    document.getElementById('offerSection').style.display = 'block';
+                    document.getElementById('answerSection').style.display = 'block';
+                    
+                    this.updateStatus('Offer created. Send it to the answerer and wait for their answer.', 'connecting');
+                } catch (error) {
+                    this.updateStatus(`Error creating offer: ${error.message}`, 'error');
+                }
+            }
+
+            async setAnswer() {
+                try {
+                    const answerText = document.getElementById('answerData').value.trim();
+                    if (!answerText) {
+                        this.updateStatus('Please paste the answer first', 'error');
+                        return;
+                    }
+
+                    const answer = JSON.parse(answerText);
+                    await this.peerConnection.setRemoteDescription(answer);
+                    
+                    this.updateStatus('Answer set. Waiting for connection...', 'connecting');
+                } catch (error) {
+                    this.updateStatus(`Error setting answer: ${error.message}`, 'error');
+                }
+            }
+
+            async sendMessage() {
+                const input = document.getElementById('messageInput');
+                const message = input.value.trim();
+                
+                if (!message || !this.client) return;
+
+                try {
+                    await this.client.chatService.sendMessage.call({
+                        message,
+                        timestamp: Date.now()
+                    });
+                    
+                    this.addMessage(`Sent: ${message}`, 'sent');
+                    input.value = '';
+
+                    await this.client.chatService.sendMessage.notify({
+                        message,
+                        timestamp: Date.now()
+                    });
+                } catch (error) {
+                    this.addMessage(`Error sending message: ${error.message}`, 'error');
+                }
+            }
+
+            async sendPing() {
+                if (!this.client) return;
+
+                try {
+                    const timestamp = Date.now();
+                    await this.client.chatService.ping.call({ timestamp });
+                    const latency = Date.now() - timestamp;
+                    
+                    this.addMessage(`Ping sent, received pong (latency: ${latency}ms)`, 'sent');
+                } catch (error) {
+                    this.addMessage(`Error sending ping: ${error.message}`, 'error');
+                }
+            }
+
+            async sendFile() {
+                const fileInput = document.getElementById('fileInput');
+                const file = fileInput.files[0];
+                
+                if (!file || !this.client) return;
+
+                try {
+                    const chunkSize = 16384;
+                    const totalChunks = Math.ceil(file.size / chunkSize);
+                    
+                    this.updateFileProgress(`Sending ${file.name} (${totalChunks} chunks)...`);
+                    
+                    for (let i = 0; i < totalChunks; i++) {
+                        const start = i * chunkSize;
+                        const end = Math.min(start + chunkSize, file.size);
+                        const chunk = file.slice(start, end);
+                        
+                        const reader = new FileReader();
+                        const base64Chunk = await new Promise((resolve) => {
+                            reader.onload = () => resolve(reader.result.split(',')[1]);
+                            reader.readAsDataURL(chunk);
+                        });
+
+                        await this.client.fileService.transfer.call({
+                            filename: file.name,
+                            size: file.size,
+                            chunk: base64Chunk,
+                            chunkIndex: i,
+                            totalChunks
+                        });
+                        
+                        this.updateFileProgress(`Sent chunk ${i + 1}/${totalChunks}`);
+                    }
+                    
+                    this.updateFileProgress(`File ${file.name} sent successfully!`);
+                } catch (error) {
+                    this.updateFileProgress(`Error sending file: ${error.message}`);
+                }
+            }
+
+            addMessage(text, type = '') {
+                const messages = document.getElementById('messages');
+                const message = document.createElement('div');
+                message.className = `message ${type}`;
+                message.textContent = `${new Date().toLocaleTimeString()}: ${text}`;
+                messages.appendChild(message);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            updateStatus(text, type = '') {
+                const status = document.getElementById('connectionStatus');
+                status.textContent = text;
+                status.className = `status ${type}`;
+                status.style.display = 'block';
+            }
+
+            updateFileProgress(text) {
+                document.getElementById('fileProgress').textContent = text;
+            }
+        }
+
+        window.copyToClipboard = (elementId) => {
+            const element = document.getElementById(elementId);
+            element.select();
+            document.execCommand('copy');
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = 'Copied!';
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
+        };
+
+        new WebRTCOfferer();
+    </script>
+</body>
+</html>

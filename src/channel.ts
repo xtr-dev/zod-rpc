@@ -2,8 +2,11 @@ import { z, ZodSchema } from 'zod';
 import { RPCMessage, MethodDefinition, MethodInfo, ServiceInfo, Transport } from './types';
 import { RPCError, ValidationError, MethodNotFoundError, TimeoutError } from './errors';
 
+/**
+ * @group Core Classes
+ */
 export class Channel {
-  private methods = new Map<string, MethodDefinition<any, any>>();
+  private methods = new Map<string, MethodDefinition<any, any>>(); // targetId:methodId -> method
   private pendingCalls = new Map<
     string,
     {
@@ -13,27 +16,25 @@ export class Channel {
     }
   >();
   private services = new Map<string, ServiceInfo>();
+  private transports = new Set<Transport>();
+  private connected = false;
 
   constructor(
-    private transport: Transport,
-    private serviceId: string,
+    private channelId: string,
     private defaultTimeout: number = 30000,
   ) {
-    if (!transport) {
-      throw new Error(
-        'Channel constructor requires a valid transport. Did you forget to pass a transport instance?',
-      );
-    }
-    this.transport.onMessage(this.handleMessage.bind(this));
+    // Channel can now exist without any transports initially
   }
 
-  async connect(): Promise<void> {
-    if (!this.transport) {
-      throw new Error(
-        'Transport is null. This should not happen if Channel was constructed properly.',
-      );
+  async connect(...transports: Transport[]): Promise<void> {
+    // Add transports to the set and connect them
+    for (const transport of transports) {
+      this.transports.add(transport);
+      transport.onMessage(this.handleMessage.bind(this));
+      await transport.connect();
     }
-    await this.transport.connect();
+
+    this.connected = true;
     await this.publishServiceInfo();
   }
 
@@ -43,13 +44,20 @@ export class Channel {
       pending.reject(new TimeoutError(`Connection closed`, traceId));
     }
     this.pendingCalls.clear();
-    await this.transport.disconnect();
+
+    // Disconnect all transports
+    for (const transport of this.transports) {
+      await transport.disconnect();
+    }
+    this.transports.clear();
+    this.connected = false;
   }
 
   publishMethod<T extends ZodSchema, U extends ZodSchema>(
     definition: MethodDefinition<T, U>,
   ): void {
-    this.methods.set(definition.id, definition);
+    const key = `${definition.targetId}:${definition.id}`;
+    this.methods.set(key, definition);
   }
 
   async invoke<T extends ZodSchema, U extends ZodSchema>(
@@ -70,8 +78,32 @@ export class Channel {
       }
     }
 
+    // Check for local method first
+    const localKey = `${targetId}:${methodId}`;
+    const localMethod = this.methods.get(localKey);
+
+    if (localMethod) {
+      // Execute locally - no network transport needed
+      try {
+        const validatedInput = localMethod.input.parse(input);
+        const result = await localMethod.handler(validatedInput);
+        const validatedOutput = localMethod.output.parse(result);
+
+        if (outputSchema) {
+          return outputSchema.parse(validatedOutput);
+        }
+        return validatedOutput;
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          throw new ValidationError(`Local method validation failed: ${error.message}`, traceId);
+        }
+        throw error;
+      }
+    }
+
+    // Not local - send via transport
     const message: RPCMessage = {
-      callerId: this.serviceId,
+      callerId: this.channelId,
       targetId,
       traceId,
       methodId,
@@ -103,7 +135,15 @@ export class Channel {
         timeout: timeoutHandle,
       });
 
-      this.transport.send(message).catch(reject);
+      // Send message to all connected transports
+      if (this.transports.size === 0) {
+        reject(new Error('No transports connected'));
+        return;
+      }
+
+      const sendPromises = Array.from(this.transports).map((transport) => transport.send(message));
+
+      Promise.all(sendPromises).catch(reject);
     });
   }
 
@@ -135,7 +175,8 @@ export class Channel {
   }
 
   private async handleRequest(message: RPCMessage): Promise<void> {
-    const method = this.methods.get(message.methodId);
+    const key = `${message.targetId}:${message.methodId}`;
+    const method = this.methods.get(key);
 
     if (!method) {
       await this.sendError(message, new MethodNotFoundError(message.methodId, message.traceId));
@@ -148,7 +189,7 @@ export class Channel {
       const validatedOutput = method.output.parse(result);
 
       const response: RPCMessage = {
-        callerId: this.serviceId,
+        callerId: this.channelId,
         targetId: message.callerId,
         traceId: message.traceId,
         methodId: message.methodId,
@@ -156,7 +197,10 @@ export class Channel {
         type: 'response',
       };
 
-      await this.transport.send(response);
+      // Send response to all connected transports
+      for (const transport of this.transports) {
+        await transport.send(response);
+      }
     } catch (error) {
       let rpcError: RPCError;
       if (error instanceof RPCError) {
@@ -202,7 +246,7 @@ export class Channel {
 
   private async sendError(originalMessage: RPCMessage, error: RPCError): Promise<void> {
     const errorMessage: RPCMessage = {
-      callerId: this.serviceId,
+      callerId: this.channelId,
       targetId: originalMessage.callerId,
       traceId: originalMessage.traceId,
       methodId: originalMessage.methodId,
@@ -211,7 +255,10 @@ export class Channel {
     };
 
     try {
-      await this.transport.send(errorMessage);
+      // Send error to all connected transports
+      for (const transport of this.transports) {
+        await transport.send(errorMessage);
+      }
     } catch (sendError) {
       console.error('Failed to send error message:', sendError);
     }
@@ -224,14 +271,14 @@ export class Channel {
     }));
 
     const serviceInfo: ServiceInfo = {
-      id: this.serviceId,
+      id: this.channelId,
       methods,
     };
 
-    this.services.set(this.serviceId, serviceInfo);
+    this.services.set(this.channelId, serviceInfo);
   }
 
   private generateTraceId(): string {
-    return `${this.serviceId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `${this.channelId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 }

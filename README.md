@@ -2,34 +2,48 @@
 
 <div align="center">
 
-**Type-safe RPC library with Zod validation for WebSocket, WebRTC, and HTTP transports**
-
-> ⚠️ **Development Notice**: This project is under active development and the API may change before the first major release (1.0.0). Use with caution in production environments.
+**Simple, type-safe RPC library with Zod validation**
 
 [![npm version](https://img.shields.io/npm/v/@xtr-dev/zod-rpc.svg)](https://www.npmjs.com/package/@xtr-dev/zod-rpc)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Test Coverage](https://img.shields.io/badge/coverage-92.33%25-brightgreen.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
 
 ## ✨ Features
 
-- 🔒 **Type Safety**: Full TypeScript support with compile-time type checking
+- 🎯 **Simple API**: Define once, use everywhere with minimal boilerplate
+- 🔒 **Type Safety**: Full TypeScript support with automatic type inference
 - ⚡ **Runtime Validation**: Automatic input/output validation using Zod schemas
-- 🌐 **Multiple Transports**: WebSocket, WebRTC DataChannel, and HTTP support
+- 🌐 **Multiple Transports**: WebSocket, HTTP, and WebRTC support
 - 📡 **Real-time**: Perfect for chat apps, collaborative tools, and live updates
-- 🔄 **Peer-to-Peer**: Direct WebRTC communication without servers
 
 ## Core Concepts
 
-**zod-rpc** is built around a few core concepts:
+**zod-rpc** makes RPC calls as simple as local function calls by abstracting away the complexity of remote communication:
 
-- **Methods**: These are the remote procedures that you can call. They are defined with Zod schemas for input and output validation.
-- **Contracts**: Contracts define the shape of your methods, without the implementation. This allows you to share the contract between the client and server, ensuring type safety.
-- **Transports**: Transports are responsible for sending and receiving messages. zod-rpc comes with built-in transports for WebSocket, WebRTC, and HTTP.
-- **Channels**: Channels are the central communication hub. They manage the connection, and allow you to publish methods and invoke remote methods.
-- **Services**: A service is a collection of methods. You can use services to group related methods together.
+### Services
+Services are collections of related RPC methods that share a common purpose (like user management or calculations). Each service has:
+- **Service ID**: A unique identifier (e.g., 'user', 'math') used for routing
+- **Method Definitions**: Individual functions with input/output schemas
+- **Shared Schema**: Consistent validation rules across client and server
+
+### Target Resolution  
+**zod-rpc** simplifies request routing by automatically handling target resolution:
+- **Automatic targeting**: By default, requests are routed using the service ID
+- **No manual routing**: Most applications don't need to specify targets explicitly
+- **Override when needed**: Advanced use cases can still specify custom targets
+
+### Type Safety & Validation
+- **Single source of truth**: Zod schemas define validation, TypeScript types, and documentation all at once
+- **Compile-time safety**: TypeScript infers types from your Zod schemas automatically
+- **Runtime validation**: All inputs and outputs are validated against schemas
+- **Zero boilerplate**: No need to write separate type definitions or maintain multiple files
+
+### Transport Abstraction
+- **Multiple transports**: WebSocket (real-time), HTTP (request/response), and WebRTC (peer-to-peer)
+- **Consistent API**: Same code works across different transport layers
+- **Automatic reconnection**: Built-in resilience for WebSocket connections
 
 ## 🚀 Quick Start
 
@@ -39,188 +53,196 @@
 npm install @xtr-dev/zod-rpc zod
 ```
 
-### Basic Usage
+### Usage
+
+Creating type-safe RPC services is incredibly simple:
+
+#### 1. Define your service (shared between client and server)
 
 ```typescript
+// shared/services.ts
 import { z } from 'zod';
-import { defineMethod, Channel, createWebSocketTransport } from 'zod-rpc';
+import { defineService } from '@xtr-dev/zod-rpc';
 
-// Define a method with Zod schemas
-const getUserMethod = defineMethod({
-  id: 'user.get',
-  input: z.object({ userId: z.string() }),
-  output: z.object({ name: z.string(), email: z.string() }),
-  handler: async (input) => ({
-    name: `User ${input.userId}`,
-    email: `user${input.userId}@example.com`
-  })
-});
-
-// Set up WebSocket transport
-const transport = createWebSocketTransport('ws://localhost:8080');
-const channel = new Channel(transport, 'my-service');
-
-// Publish method
-channel.publishMethod(getUserMethod);
-
-// Connect and start handling requests
-await channel.connect();
-```
-
-### Contract-Based Development (Recommended)
-
-For better separation between client and server code, use contracts:
-
-```typescript
-// shared/contracts.ts - Shared between client and server
-import { z } from 'zod';
-import { defineContract } from 'zod-rpc';
-
-export const userContract = defineContract({
-  id: 'user.get',
-  input: z.object({ userId: z.string() }),
-  output: z.object({ name: z.string(), email: z.string() })
-});
-
-// server.ts - Server implementation
-import { implementContract } from 'zod-rpc';
-import { userContract } from './shared/contracts';
-
-const userMethod = implementContract(userContract, async (input) => ({
-  name: `User ${input.userId}`,
-  email: `user${input.userId}@example.com`
-}));
-
-channel.publishMethod(userMethod);
-
-// client.ts - Type-safe client calls
-import { createTypedInvoker } from 'zod-rpc';
-import { userContract } from './shared/contracts';
-
-const getUser = createTypedInvoker(userContract, channel.invoke.bind(channel));
-const user = await getUser('server-id', { userId: '123' }); // Fully typed!
-```
-
-### Service Organization
-
-Services help organize related methods under a common namespace. Methods are grouped by using dotted method IDs:
-
-```typescript
-// shared/contracts.ts - Define service contracts
-import { z } from 'zod';
-import { defineContract } from 'zod-rpc';
-
-// User service contracts
-export const userService = {
-  getUser: defineContract({
-    id: 'user.get',
-    input: z.object({ userId: z.string() }),
-    output: z.object({ id: z.string(), name: z.string(), email: z.string() })
-  }),
-
-  createUser: defineContract({
-    id: 'user.create',
-    input: z.object({ name: z.string(), email: z.string() }),
-    output: z.object({ id: z.string(), success: z.boolean() })
-  }),
-
-  listUsers: defineContract({
-    id: 'user.list',
-    input: z.object({ page: z.number().min(1), limit: z.number().min(1).max(100) }),
+export const userService = defineService('user', {
+  get: {
+    input: z.object({ 
+      userId: z.string().describe('Unique identifier for the user to retrieve')
+    }),
     output: z.object({ 
-      users: z.array(z.object({ id: z.string(), name: z.string() })),
-      total: z.number() 
+      name: z.string().describe('Full name of the user'),
+      email: z.string().email().describe('Email address of the user'),
+      age: z.number().min(0).max(120).describe('Age of the user in years')
     })
-  })
-};
-
-// Math service contracts
-export const mathService = {
-  add: defineContract({
-    id: 'math.add',
-    input: z.object({ a: z.number(), b: z.number() }),
-    output: z.object({ result: z.number() })
-  }),
-
-  multiply: defineContract({
-    id: 'math.multiply',
-    input: z.object({ a: z.number(), b: z.number() }),
-    output: z.object({ result: z.number() })
-  })
-};
-
-// server.ts - Implement service methods
-import { implementContract, Channel, createWebSocketTransport } from 'zod-rpc';
-import { userService, mathService } from './shared/contracts';
-
-const userMethods = {
-  getUser: implementContract(userService.getUser, async ({ userId }) => {
-    // Implementation logic
-    return { id: userId, name: `User ${userId}`, email: `user${userId}@example.com` };
-  }),
-
-  createUser: implementContract(userService.createUser, async ({ name, email }) => {
-    // Implementation logic
-    const id = Math.random().toString(36);
-    return { id, success: true };
-  }),
-
-  listUsers: implementContract(userService.listUsers, async ({ page, limit }) => {
-    // Implementation logic
-    return { users: [], total: 0 };
-  })
-};
-
-const mathMethods = {
-  add: implementContract(mathService.add, async ({ a, b }) => ({
-    result: a + b
-  })),
-
-  multiply: implementContract(mathService.multiply, async ({ a, b }) => ({
-    result: a * b
-  }))
-};
-
-// Set up server channel and publish all service methods
-const transport = createWebSocketTransport('ws://localhost:8080');
-const channel = new Channel(transport, 'my-server');
-
-// Publish user service methods
-channel.publishMethod(userMethods.getUser);
-channel.publishMethod(userMethods.createUser);
-channel.publishMethod(userMethods.listUsers);
-
-// Publish math service methods
-channel.publishMethod(mathMethods.add);
-channel.publishMethod(mathMethods.multiply);
-
-await channel.connect();
-
-// client.ts - Create typed service clients
-import { createServiceClient, createBoundServiceClient } from 'zod-rpc';
-import { userService, mathService } from './shared/contracts';
-
-// Option 1: Create service clients that require target ID for each call
-const userClient = createServiceClient(userService, channel.invoke.bind(channel));
-const mathClient = createServiceClient(mathService, channel.invoke.bind(channel));
-
-// Use with target ID for each call
-const user = await userClient.getUser('server-id', { userId: '123' });
-const result = await mathClient.add('server-id', { a: 5, b: 3 });
-
-// Option 2: Create bound service clients pre-configured with target ID
-const boundUserClient = createBoundServiceClient(userService, 'server-id', channel.invoke.bind(channel));
-const boundMathClient = createBoundServiceClient(mathService, 'server-id', channel.invoke.bind(channel));
-
-// Use without repeating target ID (much cleaner!)
-const user2 = await boundUserClient.getUser({ userId: '456' });
-const result2 = await boundMathClient.add({ a: 10, b: 20 });
-const userList = await boundUserClient.listUsers({ page: 1, limit: 10 });
-
-// Get available methods for connected services
-const services = channel.getConnectedServices();
-const userMethods = channel.getAvailableMethods('server-id').filter(m => m.id.startsWith('user.'));
+  },
+  create: {
+    input: z.object({ 
+      name: z.string().min(1).describe('Full name of the new user'),
+      email: z.string().email().describe('Email address for the new user'),
+      age: z.number().min(0).max(120).describe('Age of the user in years')
+    }),
+    output: z.object({ 
+      id: z.string().describe('Unique identifier assigned to the new user'),
+      success: z.boolean().describe('Whether the user was created successfully')
+    })
+  }
+});
 ```
+
+#### 2. Create your server
+
+```typescript
+// server.ts
+import { createRPCServer } from '@xtr-dev/zod-rpc';
+import { userService } from './shared/services';
+
+const server = createRPCServer('ws://localhost:8080')
+  .implement(userService, {
+    get: async ({ userId }) => ({
+      name: `User ${userId}`,
+      email: `user${userId}@example.com`,
+      age: Math.floor(Math.random() * 50) + 18
+    }),
+    create: async ({ name, email, age }) => ({
+      id: Math.random().toString(36),
+      success: true
+    })
+  });
+
+await server.start();
+```
+
+#### 3. Create your client
+
+```typescript
+// client.ts
+import { createRPCClient } from '@xtr-dev/zod-rpc';
+import { userService } from './shared/services';
+
+const client = await createRPCClient({
+  url: 'ws://localhost:8080',
+  services: { user: userService }
+});
+
+// Fully typed method calls with automatic target resolution
+const user = await client.user.get({ userId: '123' });
+const newUser = await client.user.create({ 
+  name: 'Alice', 
+  email: 'alice@example.com', 
+  age: 30 
+});
+
+// TypeScript automatically infers:
+// - user: { name: string; email: string; age: number }
+// - newUser: { id: string; success: boolean }
+
+// Plus you get automatic validation and documentation from the same schemas!
+```
+
+### The Power of Single Source of Truth
+
+With zod-rpc, your Zod schemas serve multiple purposes simultaneously:
+
+```typescript
+const userService = defineService('user', {
+  get: {
+    input: z.object({ 
+      userId: z.string().describe('Unique identifier for the user to retrieve')
+    }),
+    output: z.object({ 
+      name: z.string().describe('Full name of the user'),
+      email: z.string().email().describe('Email address of the user'),
+      age: z.number().min(0).max(120).describe('Age of the user in years')
+    })
+  }
+});
+
+// This single schema definition provides:
+// ✅ Runtime validation (invalid data is caught automatically)
+// ✅ TypeScript types (full IntelliSense support)  
+// ✅ API documentation (descriptions show up in generated docs)
+// ✅ Input constraints (email format, age ranges, etc.)
+// ✅ Error messages (descriptive validation failures)
+```
+
+**No more maintaining separate:**
+- TypeScript interface files
+- Validation schemas  
+- API documentation
+- Error handling logic
+
+### Advanced Usage Options
+
+#### Fluent Builder Pattern
+
+For more complex configurations, use the fluent builder pattern:
+
+```typescript
+// Client with builder pattern
+const client = await connect('ws://localhost:8080')
+  .withId('my-client')
+  .withTimeout(10000)
+  .withServices({ user: userService, math: mathService })
+  .build();
+
+// Server with builder pattern
+const server = createServer('ws://localhost:8080')
+  .withId('my-server')
+  .withTimeout(15000)
+  .implement(userService, userImplementation)
+  .implement(mathService, mathImplementation)
+  .build();
+
+await server.start();
+```
+
+#### Custom Target and Options
+
+```typescript
+// Override automatic target resolution for specific calls
+// Useful in multi-server environments or microservices
+const user = await client.user.get({ userId: '123' }, { 
+  target: 'user-service-east',  // Route to specific server instance
+  timeout: 5000                // Custom timeout for this call
+});
+
+// Set default target for all calls from this client
+// Useful when connecting to a specific server cluster
+client.setDefaultTarget('production-cluster');
+```
+
+#### Understanding Target Resolution
+
+```typescript
+// By default, zod-rpc uses the service ID as the target
+defineService('user', { ... })  // Automatically targets 'user'
+defineService('math', { ... })  // Automatically targets 'math'
+
+// You can override this behavior:
+const client = await createRPCClient({
+  url: 'ws://localhost:8080',
+  services: { user: userService },
+  defaultTarget: 'auto'      // Use service ID (default)
+  // defaultTarget: 'server'  // Send all requests to 'server'
+});
+```
+
+## Key Benefits
+
+- **Single source of truth** - Zod schemas provide validation, types, and documentation in one place
+- **Automatic type inference** - No manual type definitions needed
+- **Runtime safety** - Zod validation catches errors early
+- **Self-documenting APIs** - Schema descriptions become your API docs automatically
+- **Simple mental model** - RPC calls work like local function calls
+- **Multiple transport support** - Same API for WebSocket, HTTP, WebRTC, and more
+- **Minimal boilerplate** - Focus on business logic, not RPC infrastructure
+
+## Examples
+
+Check out the `/examples/` directory for complete working examples:
+
+- **`/examples/websocket/`** - WebSocket client/server with real-time communication
+- **`/examples/http/`** - HTTP/Express middleware integration with REST-like patterns
 
 ## 📄 License
 

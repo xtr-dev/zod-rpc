@@ -37,6 +37,8 @@ export default [
         EventTarget: 'readonly',
         Event: 'readonly',
         WebSocket: 'readonly',
+        URL: 'readonly',
+        MessageEvent: 'readonly',
 
         // WebRTC APIs
         RTCPeerConnection: 'readonly',
@@ -49,6 +51,8 @@ export default [
         RTCIceServer: 'readonly',
         RTCIceTransportPolicy: 'readonly',
         RTCBundlePolicy: 'readonly',
+        RTCPeerConnectionIceEvent: 'readonly',
+        RTCDataChannelEvent: 'readonly',
       },
     },
     plugins: {
@@ -105,6 +109,12 @@ export default [
       'coverage/**',
       '*.js.map',
       '*.d.ts.map',
+      'docs/**',
+      'bin/**',
+      'examples/**/dist/**',
+      '.prettierrc.js',
+      'jest.config.js',
+      'fix-esm-imports.js',
     ],
   },
 ];

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Examples - Zod RPC</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #007FFF 0%, #FF6B35 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #007FFF;
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+            text-align: center;
+        }
+        .subtitle {
+            color: #2E8B57;
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 1.2rem;
+        }
+        .examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .example-card {
+            background: rgba(245, 222, 179, 0.3);
+            border-radius: 12px;
+            border: 2px solid rgba(0, 127, 255, 0.2);
+            padding: 25px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .example-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            border-color: #FF6B35;
+        }
+        .example-card h3 {
+            color: #2E8B57;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        .example-card p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .example-link {
+            display: inline-block;
+            background: #FF6B35;
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .example-link:hover {
+            background: #e55a2b;
+            transform: scale(1.05);
+        }
+        .instructions {
+            background: rgba(0, 127, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .instructions h3 {
+            color: #007FFF;
+            margin-bottom: 10px;
+        }
+        .instructions ol {
+            color: #555;
+            line-height: 1.6;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 WebRTC Examples</h1>
+        <p class="subtitle">Peer-to-peer communication with Zod RPC</p>
+        
+        <div class="examples">
+            <div class="example-card">
+                <h3>📤 Offerer</h3>
+                <p>
+                    Creates WebRTC offers and initiates peer-to-peer connections. 
+                    Start here to create an offer that can be shared with an answerer.
+                </p>
+                <a href="offerer.html" class="example-link">Open Offerer</a>
+            </div>
+            
+            <div class="example-card">
+                <h3>📥 Answerer</h3>
+                <p>
+                    Receives WebRTC offers and creates answers to establish connections.
+                    Use this to respond to offers from the offerer.
+                </p>
+                <a href="answerer.html" class="example-link">Open Answerer</a>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 How to Test</h3>
+            <ol>
+                <li>Open the <strong>Offerer</strong> page in one browser tab/window</li>
+                <li>Click "Create Offer" and copy the generated offer JSON</li>
+                <li>Open the <strong>Answerer</strong> page in another tab/window</li>
+                <li>Paste the offer JSON and click "Set Offer"</li>
+                <li>Copy the generated answer JSON back to the Offerer</li>
+                <li>Paste the answer in the Offerer and click "Set Answer"</li>
+                <li>Once connected, you can exchange messages and transfer files!</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

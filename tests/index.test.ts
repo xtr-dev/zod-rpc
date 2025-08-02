@@ -2,20 +2,13 @@
 import * as zodRpc from '../src/index';
 
 describe('Index exports', () => {
-  it('should export Channel', () => {
-    expect(zodRpc.Channel).toBeDefined();
-  });
-
-  it('should export defineMethod', () => {
-    expect(zodRpc.defineMethod).toBeDefined();
-  });
-
-  it('should export createMethodProxy', () => {
-    expect(zodRpc.createMethodProxy).toBeDefined();
-  });
-
-  it('should export createTypedInvoker', () => {
-    expect(zodRpc.createTypedInvoker).toBeDefined();
+  it('should export simplified API functions', () => {
+    expect(zodRpc.defineService).toBeDefined();
+    expect(zodRpc.createRpcClient).toBeDefined();
+    expect(zodRpc.createRpcServer).toBeDefined();
+    expect(zodRpc.connect).toBeDefined();
+    expect(zodRpc.createServer).toBeDefined();
+    expect(zodRpc.RpcServer).toBeDefined();
   });
 
   it('should export error classes', () => {
@@ -31,7 +24,7 @@ describe('Index exports', () => {
     expect(zodRpc.WebRTCTransport).toBeDefined();
     expect(zodRpc.WebRTCPeerConnection).toBeDefined();
     expect(zodRpc.HTTPTransport).toBeDefined();
-    expect(zodRpc.HTTPChannelServer).toBeDefined();
+    // HTTPChannelServer was removed as unused
   });
 
   it('should export transport factory functions', () => {

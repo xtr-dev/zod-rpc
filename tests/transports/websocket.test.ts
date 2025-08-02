@@ -16,7 +16,7 @@ class MockWebSocket {
   constructor(url: string, protocols?: string | string[]) {
     this.url = url;
     this.protocols = protocols;
-    
+
     // Simulate connection after a short delay
     setTimeout(() => {
       this.readyState = MockWebSocket.OPEN;
@@ -42,7 +42,7 @@ class MockWebSocket {
 
   dispatchEvent(event: string, data: any): void {
     if (this.eventListeners[event]) {
-      this.eventListeners[event].forEach(listener => listener(data));
+      this.eventListeners[event].forEach((listener) => listener(data));
     }
   }
 
@@ -99,7 +99,7 @@ describe('WebSocket Transport', () => {
     describe('connect', () => {
       it('should connect successfully when WebSocket opens', async () => {
         const connectPromise = transport.connect();
-        
+
         // WebSocket should auto-connect in mock
         await expect(connectPromise).resolves.not.toThrow();
         expect(transport.isConnected()).toBe(true);
@@ -108,18 +108,18 @@ describe('WebSocket Transport', () => {
       it('should resolve immediately if already connected', async () => {
         // Wait for initial connection
         await transport.connect();
-        
+
         // Second connection should resolve immediately
         await expect(transport.connect()).resolves.not.toThrow();
       });
 
       it('should reject on WebSocket error', async () => {
         const connectPromise = transport.connect();
-        
+
         // Simulate error before connection
         mockWebSocket.readyState = MockWebSocket.CONNECTING;
         mockWebSocket.simulateError();
-        
+
         await expect(connectPromise).rejects.toThrow(TransportError);
       });
     });
@@ -127,10 +127,10 @@ describe('WebSocket Transport', () => {
     describe('disconnect', () => {
       it('should disconnect WebSocket', async () => {
         await transport.connect();
-        
+
         const disconnectPromise = transport.disconnect();
         mockWebSocket.simulateClose();
-        
+
         await expect(disconnectPromise).resolves.not.toThrow();
         expect(transport.isConnected()).toBe(false);
       });
@@ -152,25 +152,25 @@ describe('WebSocket Transport', () => {
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { test: true },
-          type: 'request' as const
+          type: 'request' as const,
         };
 
         const sendSpy = jest.spyOn(mockWebSocket, 'send');
-        
+
         await expect(transport.send(message)).resolves.not.toThrow();
         expect(sendSpy).toHaveBeenCalledWith(JSON.stringify(message));
       });
 
       it('should throw error when not connected', async () => {
         mockWebSocket.readyState = MockWebSocket.CLOSED;
-        
+
         const message = {
           callerId: 'client',
           targetId: 'server',
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { test: true },
-          type: 'request' as const
+          type: 'request' as const,
         };
 
         await expect(transport.send(message)).rejects.toThrow(TransportError);
@@ -183,7 +183,7 @@ describe('WebSocket Transport', () => {
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { test: true },
-          type: 'request' as const
+          type: 'request' as const,
         };
 
         jest.spyOn(mockWebSocket, 'send').mockImplementation(() => {
@@ -197,7 +197,7 @@ describe('WebSocket Transport', () => {
     describe('onMessage', () => {
       it('should handle incoming messages', async () => {
         await transport.connect();
-        
+
         const messageHandler = jest.fn();
         transport.onMessage(messageHandler);
 
@@ -207,7 +207,7 @@ describe('WebSocket Transport', () => {
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { result: 'success' },
-          type: 'response'
+          type: 'response',
         };
 
         mockWebSocket.simulateMessage(JSON.stringify(message));
@@ -217,17 +217,17 @@ describe('WebSocket Transport', () => {
 
       it('should handle invalid JSON messages', async () => {
         await transport.connect();
-        
+
         const messageHandler = jest.fn();
         transport.onMessage(messageHandler);
-        
+
         const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
         mockWebSocket.simulateMessage('invalid json');
 
         expect(messageHandler).not.toHaveBeenCalled();
         expect(consoleSpy).toHaveBeenCalled();
-        
+
         consoleSpy.mockRestore();
       });
     });
@@ -247,12 +247,9 @@ describe('WebSocket Transport', () => {
     describe('reconnection', () => {
       it('should set up reconnection logic when autoReconnect is true', () => {
         const transport = new WebSocketTransport(mockWebSocket as any, true);
-        
+
         // Verify that the transport is created without errors
         expect(transport).toBeInstanceOf(WebSocketTransport);
-        
-        // Note: Full reconnection testing would require more complex mocking
-        // This test verifies the basic setup
       });
     });
   });

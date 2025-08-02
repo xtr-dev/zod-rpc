@@ -1,116 +1,73 @@
-# WebSocket RPC Example
+# WebSocket zod-rpc Example
 
-This example demonstrates real-time RPC communication using WebSockets with zod-rpc.
+This example demonstrates the WebSocket transport of zod-rpc, showing how to create type-safe real-time RPC services.
 
-## Overview
+## Files
 
-- **Server**: WebSocket server that handles RPC method calls
-- **Client**: Browser-based client with interactive UI hosted by Vite
-
-## Available Methods
-
-### `user.get`
-Get user information by ID.
-- **Input**: `{ userId: string }`
-- **Output**: `{ id: string, name: string, email: string }`
-
-### `user.create`
-Create a new user.
-- **Input**: `{ name: string, email: string }`
-- **Output**: `{ id: string, name: string, email: string, createdAt: string }`
-
-### `math.calculate`
-Perform mathematical calculations.
-- **Input**: `{ operation: 'add'|'subtract'|'multiply'|'divide', a: number, b: number }`
-- **Output**: `{ result: number, operation: string }`
-
-### `chat.message`
-Send chat messages (WebSocket-specific feature).
-- **Input**: `{ message: string, username: string }`
-- **Output**: `{ id: string, message: string, username: string, timestamp: string }`
-
-## Running the Example
-
-### 1. Start the WebSocket server
-```bash
-npm run example:websocket:server
-```
-
-The server will start on `ws://localhost:8080`
-
-### 2. Start the Vite development server (in another terminal)
-```bash
-npm run dev
-```
-
-The web client will be available at: `http://localhost:3001/websocket/client.html`
-
-### 3. Open the WebSocket client
-Navigate to `http://localhost:3001/websocket/client.html` in your browser and:
-
-1. Click "Connect" to establish WebSocket connection
-2. Try the different RPC methods:
-   - **Get User**: Retrieve user information
-   - **Create User**: Create new users with validation
-   - **Calculator**: Perform real-time calculations
-   - **Chat**: Send messages (demonstrates WebSocket's real-time nature)
+- `shared.ts` - Service definitions shared between client and server
+- `server.ts` - Server implementation using the simplified API
+- `client.ts` - Client usage with automatic type safety
 
 ## Key Features Demonstrated
 
-1. **Real-time Communication**: Instant bidirectional communication
-2. **Type Safety**: Full TypeScript support with runtime validation
-3. **Interactive UI**: User-friendly browser interface
-4. **Connection Management**: Automatic reconnection and state management
-5. **Error Handling**: Comprehensive error display and handling
-6. **WebSocket-specific Features**: Real-time chat functionality
+1. **Service Definition**: Define services once, use everywhere
+2. **Automatic Type Safety**: Full TypeScript support without manual type annotations
+3. **Simple Client Creation**: One function call to create a fully-typed client
+4. **Easy Server Setup**: Fluent API for server configuration
+5. **No Target ID Needed**: Automatic target resolution for most use cases
 
-## Code Structure
+## Running the Example
 
-### Server (`examples/websocket/server.ts`)
-- WebSocket server using the `ws` library
-- Method registration and handling
-- Connection management for multiple clients
+1. Start the server:
+```bash
+npm run build:examples
+node dist/examples/websocket/server.js
+```
 
-### Client (`examples/websocket/client.html`)
-- Browser-based client with HTML/CSS/JavaScript
-- WebSocket connection management
-- Interactive forms for testing RPC methods
-- Real-time results display
+2. In another terminal, run the client:
+```bash
+node dist/examples/websocket/client.js
+```
 
-## Extending the Example
+## API Comparison
 
-To add new methods:
-
-1. Define the method on the server:
+### Before (Complex)
 ```typescript
-const newMethod = defineMethod({
-  id: 'namespace.method',
-  input: z.object({ /* schema */ }),
-  output: z.object({ /* schema */ }),
-  handler: async (input) => {
-    // Implementation
-    return result;
+// Define contracts
+const getUserContract = defineContract({
+  id: 'user.get',
+  input: z.object({ userId: z.string() }),
+  output: z.object({ name: z.string(), email: z.string() })
+});
+
+// Create transport and channel
+const transport = createWebSocketTransport('ws://localhost:8080');
+const channel = new Channel('client');
+await channel.connect(transport);
+
+// Create typed invoker
+const getUser = createTypedInvoker(getUserContract, channel.invoke.bind(channel));
+
+// Use with target ID
+const user = await getUser('server', { userId: '123' });
+```
+
+### After (Simple)
+```typescript
+// Define service
+const userService = defineService('user', {
+  get: {
+    input: z.object({ userId: z.string() }),
+    output: z.object({ name: z.string(), email: z.string() })
   }
 });
 
-channel.publishMethod(newMethod);
+// Create client
+const client = await createRPCClient({
+  url: 'ws://localhost:8080',
+  services: { user: userService }
+});
+
+// Use directly - no target ID needed!
+const user = await client.user.get({ userId: '123' });
 ```
-
-2. Add the method schema to the client and create a typed invoker:
-```javascript
-const newMethodSchema = {
-  id: 'namespace.method',
-  input: z.object({ /* same schema */ }),
-  output: z.object({ /* same schema */ }),
-  handler: async () => { throw new Error('Client-side handler'); }
-};
-
-const callNewMethod = createTypedInvoker(newMethodSchema, channel.invoke.bind(channel));
-```
-
-3. Add UI elements and call the method:
-```javascript
-const result = await callNewMethod('ws-server', inputData);
-```
-
-This example showcases how WebSockets enable real-time, low-latency RPC communication perfect for interactive applications, chat systems, and live data updates.

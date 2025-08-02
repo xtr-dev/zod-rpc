@@ -1,148 +1,226 @@
-# HTTP RPC Example
+# HTTP/Express Middleware Examples
 
-This example demonstrates how to use zod-rpc with HTTP transport for building type-safe RPC APIs.
+This directory contains examples showing how to use **zod-rpc** with Express.js using the `zodRpc()` middleware.
 
 ## Overview
 
-The example includes:
-- **Server**: HTTP server that exposes RPC methods via REST endpoints
-- **Client**: HTTP client that makes type-safe RPC calls to the server
+Unlike WebSocket transport which maintains persistent connections, HTTP transport works with request/response cycles. The zod-rpc HTTP implementation provides Express middleware that can be easily integrated into your Express applications.
 
-## Available Methods
+## Examples Included
 
-### `user.get`
-Get user information by ID.
-- **Input**: `{ userId: string }`
-- **Output**: `{ id: string, name: string, email: string }`
+### 1. Express Server (`express-server.ts`)
+Demonstrates integration with Express.js using `zodRpc()` middleware with local Channel:
 
-### `user.create`
-Create a new user.
-- **Input**: `{ name: string, email: string }`
-- **Output**: `{ id: string, name: string, email: string, createdAt: string }`
+```typescript
+import express from 'express';
+import { zodRpc, Channel, implementService } from '@xtr-dev/zod-rpc';
 
-### `math.calculate`
-Perform mathematical calculations.
-- **Input**: `{ operation: 'add'|'subtract'|'multiply'|'divide', a: number, b: number }`
-- **Output**: `{ result: number, operation: string }`
+const app = express();
+app.use(express.json());
 
-## Running the Example
+// Create channel for local method invocation (no transport needed)
+const channel = new Channel('server');
 
-### 1. Build the project
-```bash
-npm run build
+// Implement services with targetId
+const userMethods = implementService(userService, {
+  get: async ({ userId }) => ({ id: userId, name: 'John' }),
+  create: async ({ name, email }) => ({ id: '123', success: true })
+}, 'server');
+
+// Publish methods to channel
+userMethods.forEach(method => channel.publishMethod(method));
+
+// Mount middleware at /rpc endpoint
+app.use('/rpc', zodRpc(channel));
 ```
 
-### 2. Start the server
-```bash
-npm run example:http:server
+### 2. Client (`client.ts`)
+Demonstrates how to create HTTP clients and make RPC calls:
+
+```typescript
+import { createRPCClient } from '@xtr-dev/zod-rpc';
+
+const client = await createRPCClient({
+  url: 'http://localhost:3000',
+  services: { user: userService }
+});
+
+const user = await client.user.get({ userId: '123' });
 ```
 
-The server will start on `http://localhost:3000` with the following endpoints:
-- `GET /health` - Health check endpoint
-- `POST /rpc` - RPC method calls
+## Getting Started
 
-### 3. Run the client (in another terminal)
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+
+### Installation
+
+1. Navigate to the HTTP examples directory:
 ```bash
-npm run example:http:client
+cd examples/http
 ```
 
-## API Usage
-
-### Direct HTTP Calls
-
-You can also make direct HTTP requests to test the API:
-
+2. Install dependencies:
 ```bash
-# Health check
+npm install
+```
+
+### Running the Examples
+
+#### Option 1: Express Server (Port 3000)
+
+1. **Start the Express server:**
+```bash
+npm start
+# or for development with auto-reload:
+npm run dev
+```
+
+2. **In another terminal, run the client:**
+```bash
+npm run client
+```
+
+
+### Testing the API
+
+#### Health Check
+```bash
 curl http://localhost:3000/health
+```
 
-# Get user
+#### Direct RPC Call
+```bash
 curl -X POST http://localhost:3000/rpc \
   -H "Content-Type: application/json" \
   -d '{
-    "callerId": "test-client",
-    "targetId": "http-server", 
+    "callerId": "curl-client",
+    "targetId": "user", 
     "traceId": "test-123",
     "methodId": "user.get",
-    "payload": {"userId": "123"},
+    "payload": {"userId": "1"},
     "type": "request"
   }'
+```
 
-# Create user
-curl -X POST http://localhost:3000/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "callerId": "test-client",
-    "targetId": "http-server",
-    "traceId": "test-456", 
-    "methodId": "user.create",
-    "payload": {"name": "John Doe", "email": "john@example.com"},
-    "type": "request"
-  }'
-
-# Calculate
-curl -X POST http://localhost:3000/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "callerId": "test-client",
-    "targetId": "http-server",
-    "traceId": "test-789",
-    "methodId": "math.calculate", 
-    "payload": {"operation": "add", "a": 10, "b": 5},
-    "type": "request"
-  }'
+#### Browser Example
+```bash
+npm run client:browser
 ```
 
 ## Key Features Demonstrated
 
-1. **Type Safety**: Full TypeScript support with compile-time type checking
-2. **Runtime Validation**: Zod schemas validate input/output at runtime
-3. **Error Handling**: Proper error propagation with detailed error messages
-4. **CORS Support**: Server includes CORS headers for browser compatibility
-5. **Health Checks**: Built-in health check endpoint
-6. **Flexible Clients**: Both typed invokers and direct channel calls supported
+### 🔧 **Middleware Integration**
+- Express.js integration with `zodRpc()` middleware
+- Local method execution without transport overhead
+- Proper error handling and response formatting
 
-## Code Structure
+### 🌐 **HTTP Transport**
+- Request/response cycle handling
+- JSON payload processing
+- CORS support for browser clients
+- Health check endpoints
 
-### Server (`server.ts`)
-- Custom HTTP server adapter using Node.js built-in `http` module
-- Method definitions with Zod schemas and handlers
-- Channel setup with method registration
-- HTTP endpoint routing for RPC calls
+### 🛡️ **Type Safety**
+- Full TypeScript support
+- Zod schema validation
+- Automatic type inference
 
-### Client (`client.ts`)
-- HTTP transport configuration
-- Type-safe method calling using `createTypedInvoker`
-- Direct channel invoke examples
-- Error handling and connection management
-- Server health checking
+### 📡 **Service Architecture**
+- Multiple services (user, math)
+- Clean service separation
+- Scalable handler pattern
 
-## Extending the Example
+## API Endpoints
 
-To add new methods:
+| Endpoint | Method | Description |
+|----------|---------|-------------|
+| `/` | GET | API information |
+| `/health` | GET | Health check |
+| `/rpc` | POST | RPC calls |
 
-1. Define the method with Zod schemas:
-```typescript
-const newMethod = defineMethod({
-  id: 'namespace.methodName',
-  input: z.object({ /* input schema */ }),
-  output: z.object({ /* output schema */ }),
-  handler: async (input) => {
-    // Implementation
-    return output;
-  }
+## Service Methods
+
+### User Service
+- `user.get(userId)` - Get user by ID
+- `user.create(name, email, age)` - Create new user  
+- `user.list(page, limit)` - List users with pagination
+
+### Math Service
+- `math.add(a, b)` - Add two numbers
+- `math.calculate(expression, precision)` - Evaluate mathematical expression
+
+## Browser Integration
+
+The HTTP transport works great with browser clients:
+
+```javascript
+// Browser-compatible RPC call
+const response = await fetch('http://localhost:3000/rpc', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    callerId: 'browser',
+    targetId: 'user',
+    traceId: 'trace-' + Date.now(),
+    methodId: 'user.get',
+    payload: { userId: '1' },
+    type: 'request'
+  })
 });
+
+const result = await response.json();
+console.log(result.payload); // User data
 ```
 
-2. Register it on the server:
-```typescript
-channel.publishMethod(newMethod);
-```
+## Production Considerations
 
-3. Create a typed invoker on the client:
-```typescript
-const callNewMethod = createTypedInvoker(newMethod, channel.invoke.bind(channel));
-// Usage: await callNewMethod('target-service-id', inputData);
-```
+### Security
+- Add authentication middleware before RPC middleware
+- Validate and sanitize inputs
+- Implement rate limiting
+- Use HTTPS in production
 
-This example shows how zod-rpc can be used to build traditional HTTP APIs with the benefits of type safety and runtime validation.
+### Performance
+- Consider connection pooling for client
+- Add request/response compression
+- Implement caching where appropriate
+- Monitor performance metrics
+
+### Error Handling
+- Implement proper error logging
+- Return appropriate HTTP status codes
+- Handle timeouts gracefully
+- Provide meaningful error messages
+
+## Comparison with WebSocket
+
+| Feature | HTTP | WebSocket |
+|---------|------|-----------|
+| **Connection** | Request/Response | Persistent |
+| **Real-time** | No | Yes |
+| **Browser Support** | Excellent | Good |
+| **Caching** | HTTP caching | None |
+| **Load Balancing** | Easy | Complex |
+| **Firewall Friendly** | Yes | Sometimes |
+
+Choose HTTP for:
+- RESTful APIs
+- Stateless operations  
+- Simple request/response patterns
+- Better caching support
+- Easier load balancing
+
+Choose WebSocket for:
+- Real-time applications
+- Persistent connections
+- Lower latency requirements
+- Bidirectional communication
+
+## Next Steps
+
+- Explore the WebSocket examples in `../websocket/`
+- Check out the main documentation in the project root
+- Try integrating with other HTTP frameworks (Fastify, Koa, etc.)
+- Experiment with different transport configurations

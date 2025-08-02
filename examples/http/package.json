@@ -1,0 +1,34 @@
+{
+  "name": "zod-rpc-http-example",
+  "version": "1.0.0",
+  "description": "HTTP/Express middleware examples for zod-rpc",
+  "main": "express-server.js",
+  "scripts": {
+    "start": "tsx express-server.ts",
+    "client": "tsx client.ts",
+    "client:browser": "tsx client.ts --browser",
+    "build": "tsc",
+    "dev": "tsx watch express-server.ts"
+  },
+  "dependencies": {
+    "@xtr-dev/zod-rpc": "file:../../",
+    "express": "^4.18.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "zod-rpc",
+    "http",
+    "express",
+    "middleware",
+    "rpc",
+    "typescript"
+  ],
+  "author": "zod-rpc",
+  "license": "MIT"
+}

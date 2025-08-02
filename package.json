@@ -1,26 +1,33 @@
 {
   "name": "@xtr-dev/zod-rpc",
-  "version": "0.2.2",
-  "description": "A TypeScript RPC library built with Zod for type-safe remote procedure calls",
+  "version": "0.3.2",
+  "description": "Simple, type-safe RPC library with Zod validation and automatic TypeScript inference",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
-      "import": "./dist/index.js"
+      "import": "./dist-esm/index.js"
     },
     "./transports": {
       "types": "./dist/transports/index.d.ts",
       "require": "./dist/transports/index.js",
-      "import": "./dist/transports/index.js"
+      "import": "./dist-esm/transports/index.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "dist-esm",
+    "bin"
   ],
+  "bin": {
+    "zod-rpc-docs": "./bin/zod-rpc-docs.js",
+    "zod-rpc-export-schemas": "./bin/zod-rpc-export-schemas.js"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:esm",
+    "build:esm": "tsc -p tsconfig.esm.json && node fix-esm-imports.js",
     "build:examples": "tsc -p tsconfig.examples.json",
     "dev": "tsc --watch",
     "test": "jest",
@@ -31,11 +38,11 @@
     "prepublishOnly": "npm run build",
     "start": "npm run dev",
     "test:watch": "jest --watch",
-    "example:contracts:server": "npm run build:examples && node dist/examples/contracts/server.js",
-    "example:contracts:client": "npm run build:examples && node dist/examples/contracts/client.js",
-    "example:http:server": "npm run build:examples && node dist/examples/http/server.js",
-    "example:websocket:server": "npm run build:examples && node dist/examples/websocket/server.js",
-    "example:dev": "npm run build:examples && vite",
+    "example:server": "npm run build:examples && node dist/examples/websocket/server.js",
+    "example:client": "npm run build:examples && node dist/examples/websocket/client.js",
+    "docs:api": "typedoc",
+    "docs:api:serve": "npm run docs:api && npx http-server docs -p 8081 -o",
+    "docs:clean": "rm -rf docs",
     "prepare": "husky"
   },
   "keywords": [
@@ -68,7 +75,7 @@
     ]
   },
   "dependencies": {
-    "zod": "^4.0.10"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
@@ -77,14 +84,23 @@
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
+    "better-docs": "^2.7.3",
+    "commander": "^12.1.0",
     "eslint": "^9.32.0",
     "husky": "^9.1.7",
     "jest": "^30.0.5",
+    "jsdoc": "^4.0.4",
     "lint-staged": "^16.1.2",
+    "marked": "^15.0.2",
+    "mathjs": "^13.2.2",
     "prettier": "^3.6.2",
     "ts-jest": "^29.4.0",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.6",
+    "tsx": "^4.20.3",
+    "typedoc": "^0.25.13",
+    "typescript": "^5.4.5",
     "ws": "^8.18.3"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
   }
 }

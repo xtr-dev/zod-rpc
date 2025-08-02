@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Answerer - Zod RPC</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #2E8B57 0%, #007FFF 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2E8B57;
+            margin-bottom: 20px;
+            font-size: 2rem;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(245, 222, 179, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(46, 139, 87, 0.2);
+        }
+        .section h3 {
+            color: #007FFF;
+            margin-top: 0;
+        }
+        button {
+            background: #2E8B57;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #246b47;
+            transform: scale(1.05);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin: 5px 0;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 120px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 6px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .message.sent {
+            background: #e8f5e8;
+            text-align: right;
+        }
+        .message.received {
+            background: #e3f2fd;
+        }
+        .copy-btn {
+            background: #FF6B35;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+        .copy-btn:hover {
+            background: #e55a2b;
+        }
+        .file-info {
+            background: #f0f8f0;
+            border: 1px solid #2E8B57;
+            border-radius: 6px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📡 WebRTC Answerer</h1>
+        
+        <div class="section">
+            <h3>1. Connection Setup</h3>
+            <h4>Paste the Offer from the offerer:</h4>
+            <textarea id="offerData" placeholder="Paste the offer JSON here..."></textarea>
+            <button id="setOffer">Set Offer & Create Answer</button>
+            
+            <div id="connectionStatus" class="status" style="display: none;"></div>
+            
+            <div id="answerSection" style="display: none;">
+                <h4>Your Answer (send this back to the offerer):</h4>
+                <textarea id="answerData" readonly></textarea>
+                <button class="copy-btn" onclick="copyToClipboard('answerData')">Copy Answer</button>
+            </div>
+        </div>
+
+        <div class="section" id="chatSection" style="display: none;">
+            <h3>2. RPC Communication</h3>
+            <div class="messages" id="messages"></div>
+            <input type="text" id="messageInput" placeholder="Type a message...">
+            <button id="sendMessage">Send Message</button>
+            <button id="pingButton">Send Ping</button>
+        </div>
+
+        <div class="section" id="fileSection" style="display: none;">
+            <h3>3. File Transfer</h3>
+            <input type="file" id="fileInput">
+            <button id="sendFile">Send File</button>
+            <div id="fileProgress" style="margin-top: 10px;"></div>
+            
+            <div id="receivedFiles">
+                <h4>Received Files:</h4>
+                <div id="fileList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createRPCServer, WebRTCPeerConnection, createWebRTCTransport } from '@xtr-dev/zod-rpc';
+        import { chatService, fileService } from './shared.js';
+
+        class WebRTCAnswerer {
+            constructor() {
+                this.peerConnection = new WebRTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                });
+                this.server = null;
+                this.client = null;
+                this.receivedFiles = new Map();
+                this.setupEventListeners();
+                this.setupPeerConnectionHandlers();
+            }
+
+            setupEventListeners() {
+                document.getElementById('setOffer').addEventListener('click', () => this.setOfferAndCreateAnswer());
+                document.getElementById('sendMessage').addEventListener('click', () => this.sendMessage());
+                document.getElementById('pingButton').addEventListener('click', () => this.sendPing());
+                document.getElementById('sendFile').addEventListener('click', () => this.sendFile());
+                
+                document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendMessage();
+                });
+            }
+
+            setupPeerConnectionHandlers() {
+                this.peerConnection.onConnectionStateChange((state) => {
+                    this.updateStatus(`Connection state: ${state}`, 
+                        state === 'connected' ? 'connected' : 'connecting');
+                    
+                    if (state === 'connected') {
+                        document.getElementById('chatSection').style.display = 'block';
+                        document.getElementById('fileSection').style.display = 'block';
+                    }
+                });
+
+                this.peerConnection.onDataChannel((channel) => {
+                    const transport = createWebRTCTransport(channel);
+                    this.setupRPCServer(transport);
+                });
+            }
+
+            setupRPCServer(transport) {
+                this.server = createRPCServer([chatService, fileService], transport);
+                
+                import('@xtr-dev/zod-rpc').then(({ createRPCClient }) => {
+                    this.client = createRPCClient([chatService, fileService], transport);
+                    this.setupRPCHandlers();
+                });
+                this.server.chatService.sendMessage.implement(async (data) => {
+                    this.addMessage(`Received: ${data.message}`, 'received');
+                    return {
+                        success: true,
+                        messageId: `msg_${Date.now()}`
+                    };
+                });
+
+                this.server.chatService.ping.implement(async (data) => {
+                    const latency = Date.now() - data.timestamp;
+                    this.addMessage(`Ping received, responding (latency: ${latency}ms)`, 'received');
+                    return {
+                        pong: Date.now()
+                    };
+                });
+
+                this.server.fileService.transfer.implement(async (data) => {
+                    return this.handleFileChunk(data);
+                });
+            }
+
+            setupRPCHandlers() {
+                if (!this.client) return;
+
+                this.client.chatService.sendMessage.onNotification((data) => {
+                    this.addMessage(`Notification: ${data.message}`, 'received');
+                });
+
+                this.client.chatService.ping.onNotification((data) => {
+                    const latency = Date.now() - data.timestamp;
+                    this.addMessage(`Ping notification received (latency: ${latency}ms)`, 'received');
+                });
+            }
+
+            async setOfferAndCreateAnswer() {
+                try {
+                    const offerText = document.getElementById('offerData').value.trim();
+                    if (!offerText) {
+                        this.updateStatus('Please paste the offer first', 'error');
+                        return;
+                    }
+
+                    this.updateStatus('Setting offer and creating answer...', 'connecting');
+                    const offer = JSON.parse(offerText);
+                    await this.peerConnection.setRemoteDescription(offer);
+                    
+                    const answer = await this.peerConnection.createAnswer();
+                    
+                    document.getElementById('answerData').value = JSON.stringify(answer, null, 2);
+                    document.getElementById('answerSection').style.display = 'block';
+                    
+                    this.updateStatus('Answer created. Send it back to the offerer.', 'connecting');
+                } catch (error) {
+                    this.updateStatus(`Error: ${error.message}`, 'error');
+                }
+            }
+
+            async sendMessage() {
+                const input = document.getElementById('messageInput');
+                const message = input.value.trim();
+                
+                if (!message || !this.client) return;
+
+                try {
+                    const result = await this.client.chatService.sendMessage.call({
+                        message,
+                        timestamp: Date.now()
+                    });
+                    
+                    this.addMessage(`Sent: ${message}`, 'sent');
+                    input.value = '';
+
+                    await this.client.chatService.sendMessage.notify({
+                        message,
+                        timestamp: Date.now()
+                    });
+                } catch (error) {
+                    this.addMessage(`Error sending message: ${error.message}`, 'error');
+                }
+            }
+
+            async sendPing() {
+                if (!this.client) return;
+
+                try {
+                    const timestamp = Date.now();
+                    const result = await this.client.chatService.ping.call({ timestamp });
+                    const latency = Date.now() - timestamp;
+                    
+                    this.addMessage(`Ping sent, received pong (latency: ${latency}ms)`, 'sent');
+                } catch (error) {
+                    this.addMessage(`Error sending ping: ${error.message}`, 'error');
+                }
+            }
+
+            async sendFile() {
+                const fileInput = document.getElementById('fileInput');
+                const file = fileInput.files[0];
+                
+                if (!file || !this.client) return;
+
+                try {
+                    const chunkSize = 16384;
+                    const totalChunks = Math.ceil(file.size / chunkSize);
+                    
+                    this.updateFileProgress(`Sending ${file.name} (${totalChunks} chunks)...`);
+                    
+                    for (let i = 0; i < totalChunks; i++) {
+                        const start = i * chunkSize;
+                        const end = Math.min(start + chunkSize, file.size);
+                        const chunk = file.slice(start, end);
+                        
+                        const reader = new FileReader();
+                        const base64Chunk = await new Promise((resolve) => {
+                            reader.onload = () => resolve(reader.result.split(',')[1]);
+                            reader.readAsDataURL(chunk);
+                        });
+
+                        const result = await this.client.fileService.transfer.call({
+                            filename: file.name,
+                            size: file.size,
+                            chunk: base64Chunk,
+                            chunkIndex: i,
+                            totalChunks
+                        });
+                        
+                        this.updateFileProgress(`Sent chunk ${i + 1}/${totalChunks}`);
+                    }
+                    
+                    this.updateFileProgress(`File ${file.name} sent successfully!`);
+                } catch (error) {
+                    this.updateFileProgress(`Error sending file: ${error.message}`);
+                }
+            }
+
+            async handleFileChunk(data) {
+                const { filename, size, chunk, chunkIndex, totalChunks } = data;
+                
+                if (!this.receivedFiles.has(filename)) {
+                    this.receivedFiles.set(filename, {
+                        chunks: new Array(totalChunks),
+                        size,
+                        receivedChunks: 0
+                    });
+                }
+
+                const fileData = this.receivedFiles.get(filename);
+                fileData.chunks[chunkIndex] = chunk;
+                fileData.receivedChunks++;
+
+                this.updateFileProgress(`Receiving ${filename}: ${fileData.receivedChunks}/${totalChunks} chunks`);
+
+                if (fileData.receivedChunks === totalChunks) {
+                    const completeFile = fileData.chunks.join('');
+                    this.displayReceivedFile(filename, completeFile, size);
+                    this.updateFileProgress(`File ${filename} received successfully!`);
+                }
+
+                return {
+                    received: true,
+                    nextChunk: chunkIndex + 1
+                };
+            }
+
+            displayReceivedFile(filename, base64Data, size) {
+                const fileList = document.getElementById('fileList');
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-info';
+                
+                const downloadLink = document.createElement('a');
+                downloadLink.href = `data:application/octet-stream;base64,${base64Data}`;
+                downloadLink.download = filename;
+                downloadLink.textContent = `📁 ${filename} (${this.formatFileSize(size)})`;
+                downloadLink.style.textDecoration = 'none';
+                downloadLink.style.color = '#2E8B57';
+                downloadLink.style.fontWeight = 'bold';
+                
+                fileDiv.appendChild(downloadLink);
+                fileList.appendChild(fileDiv);
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            addMessage(text, type = '') {
+                const messages = document.getElementById('messages');
+                const message = document.createElement('div');
+                message.className = `message ${type}`;
+                message.textContent = `${new Date().toLocaleTimeString()}: ${text}`;
+                messages.appendChild(message);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            updateStatus(text, type = '') {
+                const status = document.getElementById('connectionStatus');
+                status.textContent = text;
+                status.className = `status ${type}`;
+                status.style.display = 'block';
+            }
+
+            updateFileProgress(text) {
+                document.getElementById('fileProgress').textContent = text;
+            }
+        }
+
+        window.copyToClipboard = (elementId) => {
+            const element = document.getElementById(elementId);
+            element.select();
+            document.execCommand('copy');
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = 'Copied!';
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
+        };
+
+        new WebRTCAnswerer();
+    </script>
+</body>
+</html>

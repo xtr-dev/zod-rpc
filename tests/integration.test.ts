@@ -1,234 +1,361 @@
 import { z } from 'zod';
-import { Channel } from '../src/channel';
-import { defineMethod, createTypedInvoker } from '../src/method';
-import { Transport, RPCMessage } from '../src/types';
-
-// Create a pair of connected mock transports
-class ConnectedMockTransport implements Transport {
-  private messageHandler?: (message: RPCMessage) => void;
-  private connected = false;
-  private peer?: ConnectedMockTransport;
-
-  constructor(private name: string) {}
-
-  setPeer(peer: ConnectedMockTransport): void {
-    this.peer = peer;
-  }
-
-  async send(message: RPCMessage): Promise<void> {
-    if (!this.connected) {
-      throw new Error('Not connected');
-    }
-    
-    // Send message to peer
-    setTimeout(() => {
-      this.peer?.messageHandler?.(message);
-    }, 10);
-  }
-
-  onMessage(handler: (message: RPCMessage) => void): void {
-    this.messageHandler = handler;
-  }
-
-  async connect(): Promise<void> {
-    this.connected = true;
-  }
-
-  async disconnect(): Promise<void> {
-    this.connected = false;
-  }
-
-  isConnected(): boolean {
-    return this.connected;
-  }
-}
+import { defineService, createRpcClient, createRpcServer } from '../src';
+import WebSocket from 'ws';
 
 describe('Integration Tests', () => {
-  describe('Channel to Channel Communication', () => {
-    let transport1: ConnectedMockTransport;
-    let transport2: ConnectedMockTransport;
-    let channel1: Channel;
-    let channel2: Channel;
+  const testService = defineService('test', {
+    echo: {
+      input: z.object({ message: z.string() }),
+      output: z.object({ response: z.string() }),
+    },
+    add: {
+      input: z.object({ a: z.number(), b: z.number() }),
+      output: z.object({ result: z.number() }),
+    },
+    slow: {
+      input: z.object({ delay: z.number() }),
+      output: z.object({ completed: z.boolean() }),
+    },
+  });
+
+  const userService = defineService('user', {
+    get: {
+      input: z.object({ id: z.string() }),
+      output: z.object({ name: z.string(), email: z.string() }),
+    },
+    create: {
+      input: z.object({ name: z.string(), email: z.string() }),
+      output: z.object({ id: z.string(), success: z.boolean() }),
+    },
+  });
+
+  const findAvailablePort = async (): Promise<number> => {
+    return new Promise((resolve) => {
+      const server = new WebSocket.Server({ port: 0 });
+      server.on('listening', () => {
+        const port = (server.address() as any)?.port || 0;
+        server.close(() => resolve(port));
+      });
+    });
+  };
+
+  describe('End-to-End Workflow', () => {
+    let server: any;
+    let client: any;
+    let port: number;
 
     beforeEach(async () => {
-      transport1 = new ConnectedMockTransport('transport1');
-      transport2 = new ConnectedMockTransport('transport2');
-      transport1.setPeer(transport2);
-      transport2.setPeer(transport1);
-
-      channel1 = new Channel(transport1, 'service1');
-      channel2 = new Channel(transport2, 'service2');
-
-      await channel1.connect();
-      await channel2.connect();
+      port = await findAvailablePort();
     });
 
     afterEach(async () => {
-      await channel1.disconnect();
-      await channel2.disconnect();
+      if (client) {
+        await client.disconnect();
+      }
+      if (server) {
+        await server.stop();
+      }
     });
 
-    it('should enable bidirectional RPC calls', async () => {
-      // Define methods on service2 that service1 can call
-      const echoMethod = defineMethod({
-        id: 'echo',
-        input: z.object({ message: z.string() }),
-        output: z.object({ echo: z.string() }),
-        handler: async (input) => ({ echo: `Echo: ${input.message}` })
+    it('should complete full client-server workflow', async () => {
+      // Create and start server
+      server = createRpcServer(`ws://localhost:${port}`).implement(testService, {
+        echo: async ({ message }) => ({ response: `Server echo: ${message}` }),
+        add: async ({ a, b }) => ({ result: a + b }),
+        slow: async ({ delay }) => {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return { completed: true };
+        },
       });
 
-      const mathMethod = defineMethod({
-        id: 'math.add',
-        input: z.object({ a: z.number(), b: z.number() }),
-        output: z.object({ result: z.number() }),
-        handler: async (input) => ({ result: input.a + input.b })
+      await server.start();
+
+      // Wait a moment for server to be ready
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Create client
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: { test: testService },
+        defaultTarget: 'server',
       });
 
-      channel2.publishMethod(echoMethod);
-      channel2.publishMethod(mathMethod);
+      // Test echo method
+      const echoResult = await client.test.echo({ message: 'Hello Integration!' });
+      expect(echoResult).toEqual({ response: 'Server echo: Hello Integration!' });
 
-      // Define a method on service1 that service2 can call
-      const greetMethod = defineMethod({
-        id: 'greet',
-        input: z.object({ name: z.string() }),
-        output: z.object({ greeting: z.string() }),
-        handler: async (input) => ({ greeting: `Hello, ${input.name}!` })
+      // Test add method
+      const addResult = await client.test.add({ a: 15, b: 25 });
+      expect(addResult).toEqual({ result: 40 });
+
+      // Test slow method with timeout
+      const slowResult = await client.test.slow({ delay: 100 });
+      expect(slowResult).toEqual({ completed: true });
+    }, 10000);
+
+    it('should handle multiple services', async () => {
+      const users = new Map([
+        ['1', { name: 'Alice', email: 'alice@example.com' }],
+        ['2', { name: 'Bob', email: 'bob@example.com' }],
+      ]);
+      let nextId = 3;
+
+      server = createRpcServer(`ws://localhost:${port}`)
+        .implement(testService, {
+          echo: async ({ message }) => ({ response: `Echo: ${message}` }),
+          add: async ({ a, b }) => ({ result: a + b }),
+          slow: async ({ delay: _delay }) => ({ completed: true }),
+        })
+        .implement(userService, {
+          get: async ({ id }) => {
+            const user = users.get(id);
+            if (!user) throw new Error(`User ${id} not found`);
+            return user;
+          },
+          create: async ({ name, email }) => {
+            const id = String(nextId++);
+            users.set(id, { name, email });
+            return { id, success: true };
+          },
+        });
+
+      await server.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: {
+          test: testService,
+          user: userService,
+        },
+        defaultTarget: 'server',
       });
 
-      channel1.publishMethod(greetMethod);
-
-      // Service1 calls service2
-      const echoResult = await channel1.invoke('service2', 'echo', { message: 'test' });
-      expect(echoResult).toEqual({ echo: 'Echo: test' });
-
-      const mathResult = await channel1.invoke('service2', 'math.add', { a: 5, b: 3 });
+      // Test both services
+      const mathResult = await client.test.add({ a: 5, b: 3 });
       expect(mathResult).toEqual({ result: 8 });
 
-      // Service2 calls service1
-      const greetResult = await channel2.invoke('service1', 'greet', { name: 'World' });
-      expect(greetResult).toEqual({ greeting: 'Hello, World!' });
-    });
+      const user = await client.user.get({ id: '1' });
+      expect(user).toEqual({ name: 'Alice', email: 'alice@example.com' });
 
-    it('should work with typed invokers', async () => {
-      const testMethod = defineMethod({
-        id: 'test.typed',
-        input: z.object({ value: z.string() }),
-        output: z.object({ processed: z.string() }),
-        handler: async (input) => ({ processed: input.value.toUpperCase() })
+      const newUser = await client.user.create({
+        name: 'Charlie',
+        email: 'charlie@example.com',
+      });
+      expect(newUser.success).toBe(true);
+      expect(newUser.id).toBe('3');
+
+      // Verify the user was created
+      const createdUser = await client.user.get({ id: newUser.id });
+      expect(createdUser).toEqual({
+        name: 'Charlie',
+        email: 'charlie@example.com',
+      });
+    }, 10000);
+
+    it('should handle method options (timeout, target)', async () => {
+      server = createRpcServer(`ws://localhost:${port}`).implement(testService, {
+        echo: async ({ message }) => ({ response: `Echo: ${message}` }),
+        add: async ({ a, b }) => ({ result: a + b }),
+        slow: async ({ delay }) => {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          return { completed: true };
+        },
       });
 
-      channel2.publishMethod(testMethod);
+      await server.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Create typed invoker for service1 to call service2
-      const callTest = createTypedInvoker(testMethod, channel1.invoke.bind(channel1));
-
-      const result = await callTest('service2', { value: 'hello' });
-      expect(result).toEqual({ processed: 'HELLO' });
-    });
-
-    it('should handle concurrent calls', async () => {
-      const slowMethod = defineMethod({
-        id: 'slow',
-        input: z.object({ delay: z.number(), id: z.string() }),
-        output: z.object({ completed: z.string(), delay: z.number() }),
-        handler: async (input) => {
-          await new Promise(resolve => setTimeout(resolve, input.delay));
-          return { completed: input.id, delay: input.delay };
-        }
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: { test: testService },
+        defaultTarget: 'server',
       });
 
-      channel2.publishMethod(slowMethod);
+      // Test with custom timeout
+      const quickResult = await client.test.echo({ message: 'Quick test' }, { timeout: 1000 });
+      expect(quickResult).toEqual({ response: 'Echo: Quick test' });
 
-      // Make multiple concurrent calls
-      const promises = [
-        channel1.invoke('service2', 'slow', { delay: 50, id: 'call1' }),
-        channel1.invoke('service2', 'slow', { delay: 30, id: 'call2' }),
-        channel1.invoke('service2', 'slow', { delay: 20, id: 'call3' })
-      ];
-
-      const results = await Promise.all(promises);
-
-      expect(results).toEqual([
-        { completed: 'call1', delay: 50 },
-        { completed: 'call2', delay: 30 },
-        { completed: 'call3', delay: 20 }
-      ]);
-    });
-
-    it('should handle method errors correctly', async () => {
-      const errorMethod = defineMethod({
-        id: 'error.test',
-        input: z.object({ shouldFail: z.boolean() }),
-        output: z.object({ success: z.boolean() }),
-        handler: async (input) => {
-          if (input.shouldFail) {
-            throw new Error('Intentional test error');
-          }
-          return { success: true };
-        }
-      });
-
-      channel2.publishMethod(errorMethod);
-
-      // Test successful call
-      const successResult = await channel1.invoke('service2', 'error.test', { shouldFail: false });
-      expect(successResult).toEqual({ success: true });
-
-      // Test error handling
-      await expect(
-        channel1.invoke('service2', 'error.test', { shouldFail: true })
-      ).rejects.toThrow('Intentional test error');
-    });
-
-    it('should validate input and output with schemas', async () => {
-      const strictMethod = defineMethod({
-        id: 'strict',
-        input: z.object({ 
-          name: z.string().min(1),
-          age: z.number().min(0).max(120) 
-        }),
-        output: z.object({ 
-          message: z.string(),
-          category: z.enum(['child', 'adult', 'senior'])
-        }),
-        handler: async (input) => {
-          let category: 'child' | 'adult' | 'senior';
-          if (input.age < 18) category = 'child';
-          else if (input.age < 65) category = 'adult';
-          else category = 'senior';
-
-          return {
-            message: `${input.name} is a ${category}`,
-            category
-          };
-        }
-      });
-
-      channel2.publishMethod(strictMethod);
-
-      // Test valid input
-      const result = await channel1.invoke(
-        'service2', 
-        'strict', 
-        { name: 'John', age: 25 },
-        strictMethod.input,
-        strictMethod.output
+      // Test timeout failure
+      await expect(client.test.slow({ delay: 2000 }, { timeout: 500 })).rejects.toThrow(
+        /timed out/,
       );
-      expect(result).toEqual({
-        message: 'John is a adult',
-        category: 'adult'
-      });
+    }, 15000);
 
-      // Test invalid input (should be caught by Zod validation)
+    it('should handle connection errors gracefully', async () => {
+      // Try to connect to non-existent server
       await expect(
-        channel1.invoke(
-          'service2',
-          'strict',
-          { name: '', age: -5 } as any,
-          strictMethod.input,
-          strictMethod.output
-        )
+        createRpcClient({
+          url: `ws://localhost:${port + 1000}`, // Non-existent port
+          services: { test: testService },
+          defaultTarget: 'server',
+        }),
       ).rejects.toThrow();
     });
+
+    it('should validate input and output with Zod schemas', async () => {
+      server = createRpcServer(`ws://localhost:${port}`).implement(testService, {
+        echo: async ({ message }) => ({ response: `Echo: ${message}` }),
+        add: async ({ a, b }) => ({ result: a + b }),
+        slow: async ({ delay: _delay }) => ({ completed: true }),
+      });
+
+      await server.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: { test: testService },
+        defaultTarget: 'server',
+      });
+
+      // Valid input should work
+      const validResult = await client.test.add({ a: 5, b: 3 });
+      expect(validResult).toEqual({ result: 8 });
+
+      // Invalid input should be caught by Zod validation
+      await expect(client.test.add({ a: 'invalid', b: 3 } as any)).rejects.toThrow(/validation/i);
+    }, 10000);
+  });
+
+  describe('Auto Target Resolution', () => {
+    let server: any;
+    let client: any;
+    let port: number;
+
+    beforeEach(async () => {
+      port = await findAvailablePort();
+    });
+
+    afterEach(async () => {
+      if (client) {
+        await client.disconnect();
+      }
+      if (server) {
+        await server.stop();
+      }
+    });
+
+    it('should use service ID as default target with auto resolution', async () => {
+      server = createRpcServer(`ws://localhost:${port}`, {
+        serverId: 'test', // Use service ID as server ID for auto targeting
+      }).implement(testService, {
+        echo: async ({ message }) => ({ response: `From ${testService.id}: ${message}` }),
+        add: async ({ a, b }) => ({ result: a + b }),
+        slow: async ({ delay: _delay }) => ({ completed: true }),
+      });
+
+      await server.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: { test: testService },
+        defaultTarget: 'auto', // This should use service ID as target
+      });
+
+      const result = await client.test.echo({ message: 'Auto target test' });
+      expect(result).toEqual({ response: 'From test: Auto target test' });
+    }, 10000);
+
+    it('should support custom default target', async () => {
+      server = createRpcServer(`ws://localhost:${port}`, {
+        serverId: 'custom-server',
+      }).implement(testService, {
+        echo: async ({ message }) => ({ response: `From custom-server: ${message}` }),
+        add: async ({ a, b }) => ({ result: a + b }),
+        slow: async ({ delay: _delay }) => ({ completed: true }),
+      });
+
+      await server.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: { test: testService },
+        defaultTarget: 'custom-server',
+      });
+
+      const result = await client.test.echo({ message: 'Custom target test' });
+      expect(result).toEqual({ response: 'From custom-server: Custom target test' });
+    }, 10000);
+  });
+
+  describe('Error Scenarios', () => {
+    let server: any;
+    let client: any;
+    let port: number;
+
+    beforeEach(async () => {
+      port = await findAvailablePort();
+    });
+
+    afterEach(async () => {
+      if (client) {
+        await client.disconnect();
+      }
+      if (server) {
+        await server.stop();
+      }
+    });
+
+    it('should handle server method errors', async () => {
+      server = createRpcServer(`ws://localhost:${port}`).implement(testService, {
+        echo: async ({ message }) => {
+          if (message === 'error') {
+            throw new Error('Intentional server error');
+          }
+          return { response: `Echo: ${message}` };
+        },
+        add: async ({ a, b }) => ({ result: a + b }),
+        slow: async ({ delay: _delay }) => ({ completed: true }),
+      });
+
+      await server.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: { test: testService },
+        defaultTarget: 'server',
+      });
+
+      // Normal call should work
+      const goodResult = await client.test.echo({ message: 'hello' });
+      expect(goodResult).toEqual({ response: 'Echo: hello' });
+
+      // Error call should propagate the error
+      await expect(client.test.echo({ message: 'error' })).rejects.toThrow(
+        'Intentional server error',
+      );
+    }, 10000);
+
+    it('should handle client disconnection', async () => {
+      server = createRpcServer(`ws://localhost:${port}`).implement(testService, {
+        echo: async ({ message }) => ({ response: `Echo: ${message}` }),
+        add: async ({ a, b }) => ({ result: a + b }),
+        slow: async ({ delay: _delay }) => ({ completed: true }),
+      });
+
+      await server.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      client = await createRpcClient({
+        url: `ws://localhost:${port}`,
+        services: { test: testService },
+        defaultTarget: 'server',
+      });
+
+      // Verify connection works
+      const result = await client.test.echo({ message: 'pre-disconnect' });
+      expect(result).toEqual({ response: 'Echo: pre-disconnect' });
+
+      // Disconnect client
+      await client.disconnect();
+      expect(client.isConnected()).toBe(false);
+
+      // Calls after disconnect should fail
+      await expect(client.test.echo({ message: 'post-disconnect' })).rejects.toThrow();
+    }, 10000);
   });
 });

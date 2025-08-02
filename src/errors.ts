@@ -1,8 +1,11 @@
+/**
+ * @group Error Classes
+ */
 export class RPCError extends Error {
   constructor(
     public code: string,
     message: string,
-    public traceId?: string
+    public traceId?: string,
   ) {
     super(message);
     this.name = 'RPCError';
@@ -18,6 +21,9 @@ export class RPCError extends Error {
   }
 }
 
+/**
+ * @group Error Classes
+ */
 export class ValidationError extends RPCError {
   constructor(message: string, traceId?: string) {
     super('VALIDATION_ERROR', message, traceId);
@@ -25,6 +31,9 @@ export class ValidationError extends RPCError {
   }
 }
 
+/**
+ * @group Error Classes
+ */
 export class TransportError extends RPCError {
   constructor(message: string, traceId?: string) {
     super('TRANSPORT_ERROR', message, traceId);
@@ -32,6 +41,9 @@ export class TransportError extends RPCError {
   }
 }
 
+/**
+ * @group Error Classes
+ */
 export class MethodNotFoundError extends RPCError {
   constructor(methodId: string, traceId?: string) {
     super('METHOD_NOT_FOUND', `Method '${methodId}' not found`, traceId);
@@ -39,6 +51,9 @@ export class MethodNotFoundError extends RPCError {
   }
 }
 
+/**
+ * @group Error Classes
+ */
 export class TimeoutError extends RPCError {
   constructor(message: string, traceId?: string) {
     super('TIMEOUT_ERROR', message, traceId);

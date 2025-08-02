@@ -1,4 +1,8 @@
-import { WebRTCTransport, WebRTCPeerConnection, createWebRTCTransport } from '../../src/transports/webrtc';
+import {
+  WebRTCTransport,
+  WebRTCPeerConnection,
+  createWebRTCTransport,
+} from '../../src/transports/webrtc';
 import { TransportError } from '../../src/errors';
 
 // Mock RTCDataChannel
@@ -24,11 +28,11 @@ class MockRTCDataChannel {
 
   dispatchEvent(event: string, data: any): void {
     if (this.eventListeners[event]) {
-      this.eventListeners[event].forEach(listener => listener(data));
+      this.eventListeners[event].forEach((listener) => listener(data));
     }
   }
 
-  send(data: string): void {
+  send(_data: string): void {
     if (this.readyState !== 'open') {
       throw new Error('DataChannel is not open');
     }
@@ -78,11 +82,11 @@ class MockRTCPeerConnection {
 
   dispatchEvent(event: string, data: any): void {
     if (this.eventListeners[event]) {
-      this.eventListeners[event].forEach(listener => listener(data));
+      this.eventListeners[event].forEach((listener) => listener(data));
     }
   }
 
-  createDataChannel(label: string, options?: any): MockRTCDataChannel {
+  createDataChannel(_label: string, _options?: any): MockRTCDataChannel {
     const channel = new MockRTCDataChannel();
     this.dataChannels.push(channel);
     return channel;
@@ -96,21 +100,21 @@ class MockRTCPeerConnection {
     return { type: 'answer', sdp: 'mock-answer-sdp' };
   }
 
-  async setLocalDescription(description: RTCSessionDescriptionInit): Promise<void> {
+  async setLocalDescription(_description: RTCSessionDescriptionInit): Promise<void> {
     // Mock implementation
   }
 
-  async setRemoteDescription(description: RTCSessionDescriptionInit): Promise<void> {
+  async setRemoteDescription(_description: RTCSessionDescriptionInit): Promise<void> {
     // Mock implementation
   }
 
-  async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
+  async addIceCandidate(_candidate: RTCIceCandidateInit): Promise<void> {
     // Mock implementation
   }
 
   close(): void {
     this.connectionState = 'closed';
-    this.dataChannels.forEach(channel => channel.close());
+    this.dataChannels.forEach((channel) => channel.close());
   }
 
   // Test helper methods
@@ -149,21 +153,21 @@ describe('WebRTC Transport', () => {
       it('should connect successfully when DataChannel opens', async () => {
         const connectPromise = transport.connect();
         mockDataChannel.simulateOpen();
-        
+
         await expect(connectPromise).resolves.not.toThrow();
         expect(transport.isConnected()).toBe(true);
       });
 
       it('should resolve immediately if already connected', async () => {
         mockDataChannel.readyState = 'open';
-        
+
         await expect(transport.connect()).resolves.not.toThrow();
       });
 
       it('should reject on DataChannel error', async () => {
         const connectPromise = transport.connect();
         mockDataChannel.simulateError();
-        
+
         await expect(connectPromise).rejects.toThrow(TransportError);
       });
     });
@@ -172,10 +176,10 @@ describe('WebRTC Transport', () => {
       it('should disconnect DataChannel', async () => {
         mockDataChannel.simulateOpen();
         await transport.connect();
-        
+
         const closeSpy = jest.spyOn(mockDataChannel, 'close');
         await transport.disconnect();
-        
+
         expect(closeSpy).toHaveBeenCalled();
       });
 
@@ -197,25 +201,25 @@ describe('WebRTC Transport', () => {
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { test: true },
-          type: 'request' as const
+          type: 'request' as const,
         };
 
         const sendSpy = jest.spyOn(mockDataChannel, 'send');
-        
+
         await expect(transport.send(message)).resolves.not.toThrow();
         expect(sendSpy).toHaveBeenCalledWith(JSON.stringify(message));
       });
 
       it('should throw error when not connected', async () => {
         mockDataChannel.readyState = 'closed';
-        
+
         const message = {
           callerId: 'peer1',
           targetId: 'peer2',
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { test: true },
-          type: 'request' as const
+          type: 'request' as const,
         };
 
         await expect(transport.send(message)).rejects.toThrow(TransportError);
@@ -228,7 +232,7 @@ describe('WebRTC Transport', () => {
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { test: true },
-          type: 'request' as const
+          type: 'request' as const,
         };
 
         jest.spyOn(mockDataChannel, 'send').mockImplementation(() => {
@@ -243,7 +247,7 @@ describe('WebRTC Transport', () => {
       it('should handle incoming messages', async () => {
         mockDataChannel.simulateOpen();
         await transport.connect();
-        
+
         const messageHandler = jest.fn();
         transport.onMessage(messageHandler);
 
@@ -253,7 +257,7 @@ describe('WebRTC Transport', () => {
           traceId: 'trace-123',
           methodId: 'test.method',
           payload: { result: 'success' },
-          type: 'response'
+          type: 'response',
         };
 
         mockDataChannel.simulateMessage(JSON.stringify(message));
@@ -264,17 +268,17 @@ describe('WebRTC Transport', () => {
       it('should handle invalid JSON messages', async () => {
         mockDataChannel.simulateOpen();
         await transport.connect();
-        
+
         const messageHandler = jest.fn();
         transport.onMessage(messageHandler);
-        
+
         const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
         mockDataChannel.simulateMessage('invalid json');
 
         expect(messageHandler).not.toHaveBeenCalled();
         expect(consoleSpy).toHaveBeenCalled();
-        
+
         consoleSpy.mockRestore();
       });
     });
@@ -306,7 +310,7 @@ describe('WebRTC Transport', () => {
 
     it('should create WebRTCPeerConnection with config', () => {
       const config = {
-        iceServers: [{ urls: 'stun:stun.example.com' }]
+        iceServers: [{ urls: 'stun:stun.example.com' }],
       };
       const pc = new WebRTCPeerConnection(config);
       expect(pc).toBeInstanceOf(WebRTCPeerConnection);
@@ -315,19 +319,19 @@ describe('WebRTC Transport', () => {
     describe('createOffer', () => {
       it('should create offer with DataChannel', async () => {
         const offer = await peerConnection.createOffer();
-        
+
         expect(offer).toEqual({
           type: 'offer',
-          sdp: expect.any(String)
+          sdp: expect.any(String),
         });
       });
 
       it('should create offer with custom channel label', async () => {
         const offer = await peerConnection.createOffer('custom-channel');
-        
+
         expect(offer).toEqual({
           type: 'offer',
-          sdp: expect.any(String)
+          sdp: expect.any(String),
         });
       });
     });
@@ -335,10 +339,10 @@ describe('WebRTC Transport', () => {
     describe('createAnswer', () => {
       it('should create answer', async () => {
         const answer = await peerConnection.createAnswer();
-        
+
         expect(answer).toEqual({
           type: 'answer',
-          sdp: expect.any(String)
+          sdp: expect.any(String),
         });
       });
     });
@@ -346,22 +350,23 @@ describe('WebRTC Transport', () => {
     describe('setRemoteDescription', () => {
       it('should set remote description', async () => {
         const description = { type: 'offer' as const, sdp: 'test-sdp' };
-        
+
         await expect(peerConnection.setRemoteDescription(description)).resolves.not.toThrow();
       });
 
       it('should throw error for description without type', async () => {
         const description = { sdp: 'test-sdp' } as any;
-        
-        await expect(peerConnection.setRemoteDescription(description))
-          .rejects.toThrow('RTCSessionDescriptionInit must have a type field');
+
+        await expect(peerConnection.setRemoteDescription(description)).rejects.toThrow(
+          'RTCSessionDescriptionInit must have a type field',
+        );
       });
     });
 
     describe('handleAnswer', () => {
       it('should handle answer', async () => {
         const answer = { type: 'answer' as const, sdp: 'test-sdp' };
-        
+
         await expect(peerConnection.handleAnswer(answer)).resolves.not.toThrow();
       });
     });
@@ -369,7 +374,7 @@ describe('WebRTC Transport', () => {
     describe('addIceCandidate', () => {
       it('should add ICE candidate', async () => {
         const candidate = { candidate: 'test-candidate' };
-        
+
         await expect(peerConnection.addIceCandidate(candidate)).resolves.not.toThrow();
       });
     });
@@ -378,7 +383,7 @@ describe('WebRTC Transport', () => {
       it('should handle ICE candidate events', () => {
         const handler = jest.fn();
         peerConnection.onIceCandidate(handler);
-        
+
         // This would be tested with a real RTCPeerConnection
         expect(handler).not.toHaveBeenCalled();
       });
@@ -386,7 +391,7 @@ describe('WebRTC Transport', () => {
       it('should handle DataChannel events', () => {
         const handler = jest.fn();
         peerConnection.onDataChannel(handler);
-        
+
         // This would be tested with a real RTCPeerConnection
         expect(handler).not.toHaveBeenCalled();
       });
@@ -394,7 +399,7 @@ describe('WebRTC Transport', () => {
       it('should handle connection state change events', () => {
         const handler = jest.fn();
         peerConnection.onConnectionStateChange(handler);
-        
+
         // This would be tested with a real RTCPeerConnection
         expect(handler).not.toHaveBeenCalled();
       });
@@ -423,7 +428,7 @@ describe('WebRTC Transport', () => {
     it('should create WebRTCTransport instance', () => {
       const mockDataChannel = new MockRTCDataChannel();
       const transport = createWebRTCTransport(mockDataChannel as any);
-      
+
       expect(transport).toBeInstanceOf(WebRTCTransport);
     });
   });

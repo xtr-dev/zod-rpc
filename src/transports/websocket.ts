@@ -1,6 +1,9 @@
 import { Transport, RPCMessage } from '../types';
 import { TransportError } from '../errors';
 
+/**
+ * @group Transport Layer
+ */
 export class WebSocketTransport implements Transport {
   private messageHandler?: (message: RPCMessage) => void;
   private reconnectAttempts = 0;
@@ -117,21 +120,58 @@ export class WebSocketTransport implements Transport {
   }
 }
 
+/**
+ * @group Transport Layer
+ */
+// Overload for URL string
 export function createWebSocketTransport(
   url: string,
   protocols?: string | string[],
+  autoReconnect?: boolean,
+): WebSocketTransport;
+
+// Overload for WebSocket instance
+export function createWebSocketTransport(
+  websocket: WebSocket,
+  autoReconnect?: boolean,
+): WebSocketTransport;
+
+// Implementation
+export function createWebSocketTransport(
+  urlOrWebSocket: string | WebSocket,
+  protocolsOrAutoReconnect?: string | string[] | boolean,
   autoReconnect = true,
 ): WebSocketTransport {
-  if (!url) {
-    throw new Error('WebSocket URL is required');
-  }
+  if (typeof urlOrWebSocket === 'string') {
+    // URL string case
+    const url = urlOrWebSocket;
+    const protocols =
+      typeof protocolsOrAutoReconnect === 'boolean' ? undefined : protocolsOrAutoReconnect;
+    const shouldAutoReconnect =
+      typeof protocolsOrAutoReconnect === 'boolean' ? protocolsOrAutoReconnect : autoReconnect;
 
-  try {
-    const websocket = new WebSocket(url, protocols);
-    return new WebSocketTransport(websocket, autoReconnect);
-  } catch (error) {
-    throw new Error(
-      `Failed to create WebSocket: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    );
+    if (!url) {
+      throw new Error('WebSocket URL is required');
+    }
+
+    try {
+      const websocket = new WebSocket(url, protocols);
+      return new WebSocketTransport(websocket, shouldAutoReconnect);
+    } catch (error) {
+      throw new Error(
+        `Failed to create WebSocket: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  } else {
+    // WebSocket instance case
+    const websocket = urlOrWebSocket;
+    const shouldAutoReconnect =
+      typeof protocolsOrAutoReconnect === 'boolean' ? protocolsOrAutoReconnect : true;
+
+    if (!websocket) {
+      throw new Error('WebSocket instance is required');
+    }
+
+    return new WebSocketTransport(websocket, shouldAutoReconnect);
   }
 }
