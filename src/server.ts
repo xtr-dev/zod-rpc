@@ -4,12 +4,28 @@ import { ServiceDefinition, ServiceImplementation, implementService } from './se
 import WebSocket from 'ws';
 
 /**
+ * Configuration options for creating an RPC server.
+ *
+ * @example
+ * ```typescript
+ * const config: RPCServerConfig = {
+ *   port: 8080,
+ *   host: '0.0.0.0',
+ *   serverId: 'my-server',
+ *   timeout: 30000
+ * };
+ * ```
+ *
  * @group Server API
  */
 export interface RPCServerConfig {
+  /** Port number to listen on (for WebSocket servers) */
   port?: number;
+  /** Host address to bind to (for WebSocket servers) */
   host?: string;
+  /** Unique identifier for this server instance */
   serverId?: string;
+  /** Default timeout for RPC calls in milliseconds */
   timeout?: number;
 }
 
@@ -144,6 +160,28 @@ export class RPCServer {
 }
 
 /**
+ * Create a new RPC server instance.
+ * This is the main entry point for creating servers with service implementations.
+ *
+ * @param url - WebSocket or HTTP URL for the server to listen on
+ * @param config - Optional server configuration
+ * @returns A new RPCServer instance ready for service implementation
+ *
+ * @example
+ * ```typescript
+ * const server = createRPCServer('ws://localhost:8080', {
+ *   serverId: 'my-server',
+ *   timeout: 30000
+ * });
+ *
+ * server.implement(userService, {
+ *   get: async ({ userId }) => ({ name: `User ${userId}`, email: `user${userId}@example.com` }),
+ *   create: async ({ name, email }) => ({ id: '123', success: true })
+ * });
+ *
+ * await server.start();
+ * ```
+ *
  * @group Server API
  */
 export function createRPCServer(url: string, config?: RPCServerConfig): RPCServer {
@@ -151,9 +189,21 @@ export function createRPCServer(url: string, config?: RPCServerConfig): RPCServe
 }
 
 /**
+ * Fluent builder pattern for creating RPC servers with advanced configurations.
+ * Provides a chainable API for setting server options before building the final server.
+ *
+ * @example
+ * ```typescript
+ * const server = createServer('ws://localhost:8080')
+ *   .withId('my-server')
+ *   .withTimeout(30000)
+ *   .withHost('0.0.0.0')
+ *   .withPort(8080)
+ *   .build();
+ * ```
+ *
  * @group Server API
  */
-// Builder pattern for fluent server configuration
 export class RPCServerBuilder {
   private config: RPCServerConfig = {};
   private url: string;
@@ -192,6 +242,24 @@ export class RPCServerBuilder {
 }
 
 /**
+ * Create a new RPC server builder for fluent configuration.
+ * This is the preferred way to create servers with custom settings.
+ *
+ * @param url - WebSocket or HTTP URL for the server to listen on
+ * @returns A new RPCServerBuilder instance for chaining configuration
+ *
+ * @example
+ * ```typescript
+ * const server = createServer('ws://localhost:8080')
+ *   .withId('my-server')
+ *   .withTimeout(30000)
+ *   .withHost('0.0.0.0')
+ *   .build();
+ *
+ * server.implement(userService, userImplementation);
+ * await server.start();
+ * ```
+ *
  * @group Server API
  */
 export function createServer(url: string): RPCServerBuilder {

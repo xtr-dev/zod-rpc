@@ -3,6 +3,27 @@ import { RPCMessage, MethodDefinition, MethodInfo, ServiceInfo, Transport } from
 import { RPCError, ValidationError, MethodNotFoundError, TimeoutError } from './errors';
 
 /**
+ * Core communication channel that manages RPC method calls, message routing, and transport connections.
+ * This is the central orchestrator for all RPC communication between clients and servers.
+ *
+ * @example
+ * ```typescript
+ * const channel = new Channel('client-123', 30000);
+ *
+ * // Connect to transport
+ * const transport = createWebSocketTransport('ws://localhost:8080');
+ * await channel.connect(transport);
+ *
+ * // Call remote method
+ * const result = await channel.invoke(
+ *   'server',
+ *   'user.get',
+ *   { userId: '123' },
+ *   inputSchema,
+ *   outputSchema
+ * );
+ * ```
+ *
  * @group Core Classes
  */
 export class Channel {

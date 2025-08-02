@@ -2,6 +2,18 @@ import { Transport, RPCMessage } from '../types';
 import { TransportError } from '../errors';
 
 /**
+ * WebSocket transport implementation for real-time RPC communication.
+ * Supports automatic reconnection and handles connection lifecycle management.
+ *
+ * @example
+ * ```typescript
+ * // For client connections
+ * const transport = createWebSocketTransport('ws://localhost:8080');
+ *
+ * // For server connections with existing WebSocket
+ * const transport = createWebSocketTransport(ws, false); // No auto-reconnect
+ * ```
+ *
  * @group Transport Layer
  */
 export class WebSocketTransport implements Transport {
@@ -121,9 +133,20 @@ export class WebSocketTransport implements Transport {
 }
 
 /**
+ * Create a WebSocket transport for RPC communication.
+ * Supports both URL strings (for clients) and existing WebSocket instances (for servers).
+ *
+ * @example
+ * ```typescript
+ * // Client usage with URL
+ * const transport = createWebSocketTransport('ws://localhost:8080');
+ *
+ * // Server usage with existing WebSocket
+ * const transport = createWebSocketTransport(ws, false);
+ * ```
+ *
  * @group Transport Layer
  */
-// Overload for URL string
 export function createWebSocketTransport(
   url: string,
   protocols?: string | string[],
