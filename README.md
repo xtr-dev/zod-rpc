@@ -19,33 +19,7 @@
 - ⚡ **Runtime Validation**: Automatic input/output validation using Zod schemas
 - 🌐 **Multiple Transports**: WebSocket, HTTP, and WebRTC support
 - 📡 **Real-time**: Perfect for chat apps, collaborative tools, and live updates
-
-## Core Concepts
-
-**zod-rpc** makes RPC calls as simple as local function calls by abstracting away the complexity of remote communication:
-
-### Services
-Services are collections of related RPC methods that share a common purpose (like user management or calculations). Each service has:
-- **Service ID**: A unique identifier (e.g., 'user', 'math') used for routing
-- **Method Definitions**: Individual functions with input/output schemas
-- **Shared Schema**: Consistent validation rules across client and server
-
-### Target Resolution  
-**zod-rpc** simplifies request routing by automatically handling target resolution:
-- **Automatic targeting**: By default, requests are routed using the service ID
-- **No manual routing**: Most applications don't need to specify targets explicitly
-- **Override when needed**: Advanced use cases can still specify custom targets
-
-### Type Safety & Validation
-- **Single source of truth**: Zod schemas define validation, TypeScript types, and documentation all at once
-- **Compile-time safety**: TypeScript infers types from your Zod schemas automatically
-- **Runtime validation**: All inputs and outputs are validated against schemas
-- **Zero boilerplate**: No need to write separate type definitions or maintain multiple files
-
-### Transport Abstraction
-- **Multiple transports**: WebSocket (real-time), HTTP (request/response), and WebRTC (peer-to-peer)
-- **Consistent API**: Same code works across different transport layers
-- **Automatic reconnection**: Built-in resilience for WebSocket connections
+- ✨ **Single Source of Truth**: Zod schemas define validation, TypeScript types, and documentation all at once
 
 ## 🚀 Quick Start
 
