@@ -14,11 +14,11 @@
 
 ## ✨ Features
 
+- 💎 **Single Source of Truth**: Zod schemas define validation, TypeScript types, and documentation all at once
 - 🔒 **Type Safety**: Full TypeScript support with automatic type inference
 - ⚡ **Runtime Validation**: Automatic input/output validation using Zod schemas
 - 🌐 **Multiple Transports**: WebSocket, HTTP, and WebRTC support
 - 📡 **Real-time**: Perfect for chat apps, collaborative tools, and live updates
-- ✨ **Single Source of Truth**: Zod schemas define validation, TypeScript types, and documentation all at once
 
 ## 🚀 Quick Start
 
